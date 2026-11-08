@@ -13,7 +13,7 @@ use calibre_parser::{
             conditionals::{AstIf, IfComparisonType},
             declaration::AstDeclaration,
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
-            functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
+            functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader, FunctionParam},
             lists::AstList,
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
@@ -518,9 +518,28 @@ pub struct MirScopeDecl {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirFunctionParam {
+    pub var_type: VarType,
+    pub identifier: VariableKey,
+    pub data_type: MirDataType,
+    pub default: Option<Box<MiddleNode>>,
+}
+
+impl From<MirFunctionParam> for FunctionParam {
+    fn from(value: MirFunctionParam) -> Self {
+        Self {
+            var_type: value.var_type,
+            identifier: value.identifier.into(),
+            data_type: Some(value.data_type.into()),
+            default: value.default.map(|x| Box::new((*x).into())),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirFunction {
     #[allow(clippy::complexity)]
-    pub parameters: Box<[(VariableKey, MirDataType, Option<Box<MiddleNode>>)]>,
+    pub parameters: Box<[MirFunctionParam]>,
     pub body: Box<MiddleNode>,
     pub return_type: MirDataType,
     pub scope_id: ScopeId,
@@ -716,12 +735,9 @@ impl From<MiddleNodeType> for AstNodeType {
                             let mut lst = Vec::new();
 
                             for param in value.parameters {
-                                lst.push((
-                                    param.0.into(),
-                                    Some(param.1.into()),
-                                    param.2.map(|x| Box::new((*x).into())),
-                                ));
+                                lst.push(param.into());
                             }
+
                             lst
                         },
                         return_type: value.return_type.into(),

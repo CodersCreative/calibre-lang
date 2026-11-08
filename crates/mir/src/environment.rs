@@ -81,8 +81,8 @@ impl MiddleEnvironment {
         )?;
 
         let params = overload.header.parameters.iter().map(|param| {
-            let ty = match param.1.clone() {
-                Some(x) if param.2.is_none() => {
+            let ty = match param.data_type.clone() {
+                Some(x) if param.default.is_none() => {
                     self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
                 }
                 _ => {

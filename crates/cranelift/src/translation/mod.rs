@@ -6,6 +6,7 @@ use calibre_lir::MirDataType;
 use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
 use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
+use calibre_parser::ast::nodes::VarType;
 use cranelift::codegen::ir::FuncRef;
 use cranelift::codegen::isa::TargetIsa;
 use cranelift::prelude::*;
@@ -136,38 +137,68 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             None
         };
 
-        for (i, (name, data_type)) in function.params.iter().enumerate() {
-            let cl_ty = self.types.to_cranelift_type(data_type);
+        for (i, param) in function.params.iter().enumerate() {
+            let cl_ty = self.types.to_cranelift_type(&param.data_type);
             let var = self.builder.declare_var(cl_ty);
 
             if let Some(&value) = block_params.get(i) {
-                self.builder.def_var(var, value);
+                let value = CompiledValue::new(value, param.data_type.clone());
 
                 if function.memo
                     && let Some(hasher_ptr) = memo_hasher
                     && (function.memo_params == 0 || (function.memo_params & (1 << i) != 0))
                 {
-                    let tag = data_type.type_tag(self.registry.enums()) as i64;
+                    let tag = param.data_type.type_tag(self.registry.enums()) as i64;
                     let tag = self.builder.ins().iconst(self.types.int(), tag);
 
-                    let value = CompiledValue::new(value, data_type.clone());
                     let value = self.convert_to_i64(value.clone())?;
 
                     let hash_add_func = *self
                         .runtime_functions
                         .get("calibre_hash_add")
                         .ok_or("calibre_hash_add not found in runtime_functions")?;
+
                     let hash_add_ref = self
                         .module
                         .declare_func_in_func(hash_add_func, self.builder.func);
+
                     self.builder
                         .ins()
                         .call(hash_add_ref, &[hasher_ptr, tag, value]);
                 }
+
+                let value = if param.var_type == VarType::Mutable && !param.data_type.is_ref() {
+                    let func_id =
+                        self.runtime_functions
+                            .get("calibre_deep_clone")
+                            .ok_or(String::from(
+                                "calibre_deep_clone not found in runtime_functions",
+                            ))?;
+
+                    let func_ref = self
+                        .module
+                        .declare_func_in_func(*func_id, self.builder.func);
+
+                    let tag = value.data_type.type_tag(self.registry.enums()) as i64;
+                    let tag = self.builder.ins().iconst(self.types.int(), tag);
+
+                    let value = self.convert_to_i64(value)?;
+
+                    let call = self
+                        .builder
+                        .ins()
+                        .call(func_ref, &[tag, value]);
+
+                    self.builder.inst_results(call)[0]
+                } else {
+                    value.value
+                };
+
+                self.builder.def_var(var, value);
             }
 
             self.variables
-                .insert(name.clone(), (data_type.clone(), var));
+                .insert(param.identifier.clone(), (param.data_type.clone(), var));
         }
 
         if function.memo

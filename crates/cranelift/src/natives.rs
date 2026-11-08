@@ -94,6 +94,14 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_deep_clone",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
                 "calibre_list_set_index",
                 RuntimeFunction {
                     params: vec![

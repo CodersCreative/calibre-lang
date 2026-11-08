@@ -3,6 +3,8 @@ use crate::Parser as CalibreParser;
 use crate::ast::idents::ParserText;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
+use crate::ast::nodes::VarType;
+use crate::ast::nodes::functions::FunctionParam;
 use crate::ast::nodes::functions::{
     AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader,
 };
@@ -48,13 +50,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
 
 #[derive(Clone)]
 enum FnParamGroup {
-    Plain(
-        Vec<(
-            PotentialDollarIdentifier,
-            Option<ParserDataType>,
-            Option<Box<AstNode>>,
-        )>,
-    ),
+    Plain(Vec<FunctionParam>),
     Destructure {
         pattern: DestructurePattern,
         data_type: Option<ParserDataType>,
@@ -70,9 +66,8 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
-        let normal = just(Token::Mut)
-            .or_not()
-            .ignore_then(data.dollar_ident.clone())
+        let normal = VarType::parser(())
+            .then(data.dollar_ident.clone())
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
@@ -90,7 +85,12 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 FnParamGroup::Plain(
                     names
                         .into_iter()
-                        .map(|n| (n, ty.clone(), default.clone().map(Box::new)))
+                        .map(|ident| FunctionParam {
+                            var_type: ident.0,
+                            identifier: ident.1,
+                            data_type: ty.clone(),
+                            default: default.clone().map(Box::new),
+                        })
                         .collect::<Vec<_>>(),
                 )
             });
@@ -160,14 +160,16 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                             let param_index = parameters.len();
                             index += 1;
 
-                            parameters.push((
-                                PotentialDollarIdentifier::Identifier(ParserText::new(
+                            parameters.push(FunctionParam {
+                                var_type: VarType::Immutable,
+                                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                                     span,
                                     format!("destructure_param_{}", index),
                                 )),
                                 data_type,
                                 default,
-                            ));
+                            });
+
                             param_destructures.push((param_index, pattern));
                         }
                     }

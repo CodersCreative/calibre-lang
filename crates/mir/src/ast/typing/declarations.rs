@@ -47,7 +47,11 @@ impl MirTypable for MirFunction {
     ) -> Option<MirDataType> {
         Some(MirDataType::Function {
             return_type: Box::new(self.return_type.clone()),
-            parameters: self.parameters.iter().map(|x| x.1.clone()).collect(),
+            parameters: self
+                .parameters
+                .iter()
+                .map(|x| x.data_type.clone())
+                .collect(),
         })
     }
 }

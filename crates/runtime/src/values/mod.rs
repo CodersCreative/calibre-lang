@@ -14,6 +14,7 @@ use wasm_sync::Mutex;
 
 pub mod aggregate;
 pub mod big;
+pub mod clone;
 pub mod enums;
 pub mod hasher;
 pub mod host;

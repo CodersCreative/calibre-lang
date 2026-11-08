@@ -1,6 +1,6 @@
 use crate::{
     ast::nodes::{
-        AstNode,
+        AstNode, VarType,
         matching::{AstFnMatch, AstMatch, MatchArmType, MatchBody},
     },
     formatter::{AstFormatting, Formatter},
@@ -170,13 +170,20 @@ impl FnMatchPreFormat {
         };
 
         let param_str = if let Some(param) = fn_match.header.parameters.first() {
-            let mut txt = String::new();
-            if let Some(dt) = &param.1 {
+            let mut txt = if param.var_type == VarType::Immutable {
+                String::new()
+            } else {
+                format!(" {}", param.var_type)
+            };
+
+            if let Some(dt) = &param.data_type {
                 txt.push_str(&format!(" {}", dt));
             }
-            if let Some(default) = &param.2 {
+
+            if let Some(default) = &param.default {
                 txt.push_str(&format!(" = {}", default.format(formatter)));
             }
+
             txt
         } else {
             String::new()

@@ -1,11 +1,7 @@
 use crate::{
-    ast::{
-        idents::PotentialDollarIdentifier,
-        nodes::{
-            AstNode, DestructurePattern,
-            functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
-        },
-        types::ParserDataType,
+    ast::nodes::{
+        DestructurePattern, VarType,
+        functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionParam},
     },
     formatter::{AstFormatting, Formatter},
 };
@@ -19,6 +15,7 @@ pub struct FunctionPreFormat {
 }
 
 pub struct FunctionParamInfo {
+    var_type: VarType,
     name: String,
     data_type: Option<String>,
     default_value: Option<String>,
@@ -61,11 +58,7 @@ impl FunctionPreFormat {
 
     #[allow(clippy::type_complexity)]
     fn group_parameters(
-        parameters: &[(
-            PotentialDollarIdentifier,
-            Option<ParserDataType>,
-            Option<Box<AstNode>>,
-        )],
+        parameters: &[FunctionParam],
         destructure_map: &FxHashMap<usize, &DestructurePattern>,
         formatter: &mut Formatter,
     ) -> Vec<Vec<FunctionParamInfo>> {
@@ -94,11 +87,7 @@ impl FunctionPreFormat {
     }
 
     fn create_param_info(
-        param: &(
-            PotentialDollarIdentifier,
-            Option<ParserDataType>,
-            Option<Box<AstNode>>,
-        ),
+        param: &FunctionParam,
         idx: usize,
         destructure_map: &FxHashMap<usize, &DestructurePattern>,
         formatter: &mut Formatter,
@@ -106,17 +95,23 @@ impl FunctionPreFormat {
         let name = if let Some(pattern) = destructure_map.get(&idx) {
             pattern.format(formatter, true)
         } else {
-            param.0.to_string()
+            param.identifier.to_string()
         };
 
-        let data_type = param.1.as_ref().map(|dt| dt.to_string());
-        let default_value = param.2.as_ref().map(|val| val.format(formatter));
+        let data_type = param.data_type.as_ref().map(|dt| dt.to_string());
+        let default_value = param.default.as_ref().map(|val| val.format(formatter));
 
         let expanded = {
-            let mut txt = name.clone();
+            let mut txt = if param.var_type == VarType::Immutable {
+                name.clone()
+            } else {
+                format!("{} {}", param.var_type, name)
+            };
+
             if let Some(dt) = &data_type {
                 txt.push_str(&format!(" : {}", dt));
             }
+
             if let Some(val) = &default_value {
                 txt.push_str(&format!(
                     " {}= {}",
@@ -124,10 +119,12 @@ impl FunctionPreFormat {
                     val
                 ));
             }
+
             txt
         };
 
         FunctionParamInfo {
+            var_type: param.var_type,
             name,
             data_type,
             default_value,
@@ -139,7 +136,16 @@ impl FunctionPreFormat {
         self.param_groups
             .iter()
             .map(|group| {
-                let names: Vec<String> = group.iter().map(|p| p.name.clone()).collect();
+                let names: Vec<String> = group
+                    .iter()
+                    .map(|p| {
+                        if p.var_type == VarType::Immutable {
+                            p.name.clone()
+                        } else {
+                            format!("{} {}", p.var_type, p.name)
+                        }
+                    })
+                    .collect();
                 let last = group.last().unwrap();
                 let mut txt = names.join(" ");
 

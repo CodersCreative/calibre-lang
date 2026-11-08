@@ -12,7 +12,6 @@ use calibre_parser::{
         Operator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{AstNode, AstNodeType, VarType, functions::FunctionHeader},
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -88,9 +87,10 @@ impl FunctionParamDefault {
         header
             .parameters
             .iter()
-            .map(|(name, declared_ty, default)| FunctionParamDefault {
-                name: Ustr::from(&name.to_string()),
-                explicit_default: default
+            .map(|param| FunctionParamDefault {
+                name: Ustr::from(&param.identifier.to_string()),
+                explicit_default: param
+                    .default
                     .clone()
                     .map(|node| {
                         let span = node.span;
@@ -98,21 +98,15 @@ impl FunctionParamDefault {
                             env,
                             scope,
                             span,
-                            declared_ty.as_ref().and_then(|x| {
+                            param.data_type.as_ref().and_then(|x| {
                                 env.resolve_data_type(scope, x, ResolutionOptions::typing())
                                     .ok()
                             }),
                         ))
                     })
                     .map(|x| *x),
-                implicit_none: default.is_none()
-                    && matches!(
-                        declared_ty,
-                        Some(ParserDataType {
-                            data_type: ParserInnerType::Option(_),
-                            ..
-                        })
-                    ),
+                implicit_none: param.data_type.is_none()
+                    && param.data_type.as_ref().is_some_and(|x| x.is_option()),
             })
             .collect()
     }

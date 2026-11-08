@@ -408,19 +408,20 @@ impl ProcessedVariable {
 
                 let is_dependant = match &value.node_type {
                     AstNodeType::FunctionDeclaration(AstFunction { header, .. }) => {
-                        let param_type =
-                            if let Some(Some(param)) = header.parameters.first().map(|x| &x.1) {
-                                env.resolve_data_type(scope, param, ResolutionOptions::typing())
-                                    .ok()
-                                    .map(|x| x.unwrap_all_refs().clone())
-                            } else if let Some(Some(node)) =
-                                header.parameters.first().map(|x| x.2.clone())
-                            {
-                                env.resolve_type_from_node(scope, &node)
-                                    .map(|x| x.unwrap_all_refs().clone())
-                            } else {
-                                None
-                            };
+                        let param_type = if let Some(Some(param)) =
+                            header.parameters.first().map(|x| &x.data_type)
+                        {
+                            env.resolve_data_type(scope, param, ResolutionOptions::typing())
+                                .ok()
+                                .map(|x| x.unwrap_all_refs().clone())
+                        } else if let Some(Some(node)) =
+                            header.parameters.first().map(|x| x.default.clone())
+                        {
+                            env.resolve_type_from_node(scope, &node)
+                                .map(|x| x.unwrap_all_refs().clone())
+                        } else {
+                            None
+                        };
 
                         if let Some(ref param_type) = param_type {
                             resolved_target.can_unify(

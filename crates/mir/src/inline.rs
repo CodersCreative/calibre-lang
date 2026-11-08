@@ -42,7 +42,7 @@ fn collect_inlineable(
                 && !&expr.calls_self(identifier)
                 && expr.len() <= max_nodes
             {
-                let params = parameters.iter().map(|(p, _, _)| p.clone()).collect();
+                let params = parameters.iter().map(|p| p.identifier.clone()).collect();
                 map.insert(identifier.clone(), InlineFn { params, body: expr });
             }
         }

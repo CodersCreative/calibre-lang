@@ -11,7 +11,7 @@ use calibre_parser::{
             AstNode, AstNodeType, VarType,
             declaration::AstDeclaration,
             flow::{AstTry, TryCatch, TryType},
-            functions::{AstFunction, CallArg, FunctionHeader},
+            functions::{AstFunction, CallArg, FunctionHeader, FunctionParam},
             literals::{AstString, AstStruct},
             types::{AstImpl, AstType, TypeDefType},
         },
@@ -108,16 +108,18 @@ impl MiddleEnvironment {
                             header: FunctionHeader {
                                 generics: GenericTypes::default(),
                                 parameters: vec![
-                                    (
-                                        PotentialDollarIdentifier::new(span, "self"),
-                                        Some(self_ty.clone()),
-                                        None,
-                                    ),
-                                    (
-                                        PotentialDollarIdentifier::new(span, "value"),
-                                        Some(ty.clone().into()),
-                                        None,
-                                    ),
+                                    FunctionParam {
+                                        var_type: VarType::Mutable,
+                                        identifier: PotentialDollarIdentifier::new(span, "self"),
+                                        data_type: Some(self_ty.clone()),
+                                        default: None,
+                                    },
+                                    FunctionParam {
+                                        var_type: VarType::Immutable,
+                                        identifier: PotentialDollarIdentifier::new(span, "value"),
+                                        data_type: Some(ty.clone().into()),
+                                        default: None,
+                                    },
                                 ],
                                 return_type: self_ty.clone(),
                                 param_destructures: Vec::new(),
@@ -196,11 +198,12 @@ impl MiddleEnvironment {
                     AstNodeType::FunctionDeclaration(AstFunction {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
-                            parameters: vec![(
-                                PotentialDollarIdentifier::new(span, "self"),
-                                Some(self_ty),
-                                None,
-                            )],
+                            parameters: vec![FunctionParam {
+                                var_type: VarType::Immutable,
+                                identifier: PotentialDollarIdentifier::new(span, "self"),
+                                data_type: Some(self_ty.clone()),
+                                default: None,
+                            }],
                             return_type: ParserDataType::new(
                                 span,
                                 ParserInnerType::Result {

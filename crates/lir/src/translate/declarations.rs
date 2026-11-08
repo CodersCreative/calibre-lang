@@ -122,11 +122,12 @@ impl LirLowering for MirFunction {
             .parameters
             .iter()
             .enumerate()
-            .map(|(i, (name, _, _))| {
-                if referenced_names.contains(name) {
+            .map(|(i, param)| {
+                if referenced_names.contains(&param.identifier) {
                     referenced_params |= 1 << i;
                 }
-                name.clone()
+
+                param.identifier.clone()
             })
             .collect();
 
@@ -183,7 +184,7 @@ impl LirLowering for MirFunction {
 
         let mut memo_params = 0;
         for (i, param) in self.parameters.iter().enumerate() {
-            if self.memo_params.contains(param.0.name()) {
+            if self.memo_params.contains(param.identifier.name()) {
                 memo_params |= 1 << i;
             }
         }
@@ -195,7 +196,7 @@ impl LirLowering for MirFunction {
                 params: self
                     .parameters
                     .into_iter()
-                    .map(|x| (x.0, x.1))
+                    .map(|x| x.into())
                     .collect::<Vec<_>>()
                     .into_boxed_slice(),
                 captures: captures_for_func.into_boxed_slice(),

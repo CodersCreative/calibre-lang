@@ -2,10 +2,11 @@ use super::super::VM;
 use crate::{
     VarName,
     error::RuntimeError,
-    value::{RuntimeValue, TerminateValue, hashable::HashKey},
+    value::{DeepClone, RuntimeValue, TerminateValue, hashable::HashKey},
 };
 use calibre_bytecode::{Reg, VMBlock, VMFunction};
 use calibre_lir::{VariableKey, ast::BlockId};
+use calibre_parser::ast::nodes::VarType;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{instrument, trace};
@@ -224,13 +225,20 @@ impl VM {
                 }
             }
 
-            for (name, reg) in function
+            for (param, reg) in function
                 .params
                 .iter()
                 .zip(function.param_regs.iter().copied())
             {
                 let value = self.get_reg_value(reg).clone();
-                let _ = self.variables.insert(name.clone(), value);
+
+                let value = if param.var_type == VarType::Mutable && !param.is_ref {
+                    value.deep_clone(self)
+                } else {
+                    value
+                };
+
+                let _ = self.variables.insert(param.identifier.clone(), value);
             }
 
             let filtered_captures: Vec<(VariableKey, RuntimeValue)> = captures
@@ -317,7 +325,7 @@ impl VM {
         self.restore_captures(prev_vars);
 
         for name in function.params.iter() {
-            self.variables.remove(name);
+            self.variables.remove(&name.identifier);
         }
 
         Ok(Some(result))

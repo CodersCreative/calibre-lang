@@ -125,8 +125,34 @@ impl CraneliftTranslation for LirClone {
         translator: &mut FunctionTranslator<'a, M>,
         data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        // TODO Cloning
-        self.value.translate(translator, data_type)
+        let value = self.value.translate(translator, data_type)?;
+        let data_type = value.data_type.clone();
+
+        let func_id = translator
+            .runtime_functions
+            .get("calibre_deep_clone")
+            .ok_or(String::from(
+                "calibre_deep_clone not found in runtime_functions",
+            ))?;
+
+        let func_ref = translator
+            .module
+            .declare_func_in_func(*func_id, translator.builder.func);
+
+        let tag = data_type.type_tag(translator.registry.enums()) as i64;
+        let tag = translator.builder.ins().iconst(translator.types.int(), tag);
+
+        let value = translator.convert_to_i64(value)?;
+
+        let call = translator
+            .builder
+            .ins()
+            .call(func_ref, &[tag, value]);
+
+        Ok(CompiledValue::new(
+            translator.builder.inst_results(call)[0],
+            data_type.unwrap_all_refs().clone(),
+        ))
     }
 }
 

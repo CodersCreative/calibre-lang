@@ -13,14 +13,21 @@ use calibre_parser::{
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType,
-            functions::{AstCurry, AstFunction, CallArg, FunctionHeader},
+            AstNode, AstNodeType, VarType,
+            functions::{AstCurry, AstFunction, CallArg, FunctionHeader, FunctionParam},
             matching::AstFnMatch,
         },
         types::GenericTypes,
     },
 };
 use tracing::instrument;
+
+pub type CurryParamType = (
+    VarType,
+    PotentialDollarIdentifier,
+    Option<MirDataType>,
+    Option<Box<AstNode>>,
+);
 
 impl MirLowering for AstCurry {
     #[instrument(skip_all)]
@@ -49,16 +56,12 @@ impl MiddleEnvironment {
     #[allow(clippy::type_complexity)]
     fn build_curried_return_type(
         _span: Span,
-        params: &[(
-            PotentialDollarIdentifier,
-            Option<MirDataType>,
-            Option<Box<AstNode>>,
-        )],
+        params: &[CurryParamType],
         return_type: MirDataType,
     ) -> MirDataType {
         let mut result = return_type;
 
-        for (_, param_type, _) in params.iter().rev() {
+        for (_, _, param_type, _) in params.iter().rev() {
             result = MirDataType::function(
                 vec![param_type.clone().unwrap_or(MirDataType::Dynamic)],
                 result,
@@ -71,17 +74,13 @@ impl MiddleEnvironment {
     fn build_curried_call(
         span: Span,
         target: AstNode,
-        params: Vec<(
-            PotentialDollarIdentifier,
-            Option<MirDataType>,
-            Option<Box<AstNode>>,
-        )>,
+        params: Vec<CurryParamType>,
         return_type: MirDataType,
         mut bound: Vec<AstNode>,
     ) -> AstNode {
         let mut params = params.into_iter();
 
-        let Some((first_name, first_type, first_default)) = params.next() else {
+        let Some((first_var_type, first_name, first_type, first_default)) = params.next() else {
             return AstNode::call(
                 span,
                 target,
@@ -105,7 +104,12 @@ impl MiddleEnvironment {
             AstNodeType::FunctionDeclaration(AstFunction {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
-                    parameters: vec![(first_name, Some(first_type.into()), first_default)],
+                    parameters: vec![FunctionParam {
+                        var_type: first_var_type,
+                        identifier: first_name,
+                        data_type: Some(first_type.into()),
+                        default: first_default,
+                    }],
                     return_type: Self::build_curried_return_type(
                         span,
                         &params,
@@ -188,6 +192,8 @@ impl MiddleEnvironment {
                     .enumerate()
                     .map(|(index, param)| {
                         (
+                            // TODO Find a way to get the mutability
+                            VarType::Mutable,
                             PotentialDollarIdentifier::Identifier(ParserText::new(
                                 span,
                                 format!("curry_arg_{index}"),

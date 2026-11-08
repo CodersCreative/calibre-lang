@@ -3,6 +3,7 @@ use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::functions::FunctionHeader;
+use crate::ast::nodes::functions::FunctionParam;
 use crate::ast::nodes::matching::{
     AstFnMatch, AstMatch, MatchArmType, MatchBody, MatchStringPatternPart, MatchStructFieldPattern,
 };
@@ -521,7 +522,8 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
     fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Fn)
             .ignore_then(just(Token::Match))
-            .ignore_then(GenericTypes::parser(data.clone()).or_not())
+            .ignore_then(VarType::parser(()))
+            .then(GenericTypes::parser(data.clone()).or_not())
             .then(data.data_type.clone().or_not())
             .then(just(Token::Eq).ignore_then(data.node.clone()).or_not())
             .then(
@@ -535,17 +537,18 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
             )
             .map_with_span(
-                |((((generics, param_ty), default), return_ty), body), span| {
+                |(((((var_type, generics), data_type), default), return_ty), body), span| {
                     let header = FunctionHeader {
                         generics: generics.unwrap_or_default(),
-                        parameters: vec![(
-                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                        parameters: vec![FunctionParam {
+                            var_type,
+                            identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                                 span,
                                 "match_value".to_string(),
                             )),
-                            param_ty,
-                            default.map(Box::new),
-                        )],
+                            data_type,
+                            default: default.map(Box::new),
+                        }],
                         return_type: return_ty.unwrap_or_else(|| ParserDataType::null(span)),
                         param_destructures: Vec::new(),
                     };

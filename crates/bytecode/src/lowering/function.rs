@@ -92,8 +92,12 @@ impl FunctionLowering {
 
         debug!("function lowering completed");
 
-        let param_names: FxHashSet<VariableKey> =
-            lower.func.params.iter().map(|(n, _)| n.clone()).collect();
+        let param_names: FxHashSet<VariableKey> = lower
+            .func
+            .params
+            .iter()
+            .map(|param| param.identifier.clone())
+            .collect();
 
         lower.blocks =
             FunctionLowering::optimize_blocks(lower.blocks, lower.entry, &lower.block_map);
@@ -104,7 +108,7 @@ impl FunctionLowering {
                 .func
                 .params
                 .iter()
-                .map(|(n, _)| n.clone())
+                .map(|param| param.clone().into())
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             captures: lower
@@ -148,7 +152,7 @@ impl FunctionLowering {
 
         let mut locals = FxHashSet::default();
         if !is_global {
-            locals.extend(func.params.iter().map(|(name, _)| name.clone()));
+            locals.extend(func.params.iter().map(|param| param.identifier.clone()));
 
             for instr in func.blocks.iter().flatten().flat_map(|b| &b.instructions) {
                 if let LirNodeType::Declare(LirDeclare { dest, .. }) = &instr.node_type {

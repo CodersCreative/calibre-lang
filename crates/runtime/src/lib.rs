@@ -1,6 +1,6 @@
 use crate::{
     native::fs,
-    values::{aggregate, big, enums, hasher, list, operation, range, string},
+    values::{aggregate, big, clone, enums, hasher, list, operation, range, string},
 };
 use astro_float::RoundingMode;
 
@@ -23,6 +23,10 @@ unsafe impl Sync for RuntimeSymbol {}
 pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
     &[
         // memory
+        RuntimeSymbol {
+            name: "calibre_deep_clone",
+            ptr: clone::calibre_deep_clone as *const u8,
+        },
         RuntimeSymbol {
             name: "calibre_deref",
             ptr: values::calibre_deref as *const u8,
