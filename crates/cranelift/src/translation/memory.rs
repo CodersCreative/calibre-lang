@@ -2,7 +2,7 @@ use crate::{
     translation::{CraneliftTranslation, FunctionTranslator},
     values::CompiledValue,
 };
-use calibre_lir::Key;
+use calibre_lir::{Key, ast::LirClone};
 use calibre_lir::{
     MirDataType,
     ast::{LirDrop, LirLoad, LirMove},
@@ -116,6 +116,17 @@ impl CraneliftTranslation for LirMove {
         } else {
             Err(format!("Unable to find variable for move: {}", self.value).into())
         }
+    }
+}
+
+impl CraneliftTranslation for LirClone {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+        data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        // TODO Cloning
+        self.value.translate(translator, data_type)
     }
 }
 

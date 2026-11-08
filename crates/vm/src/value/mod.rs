@@ -26,6 +26,7 @@ use std::{
 use wasm_sync::Mutex;
 
 mod bridge;
+pub mod clone;
 pub mod conversion;
 mod display;
 pub mod embedded;
@@ -44,6 +45,10 @@ pub const BIG_ROUNDING: RoundingMode = RoundingMode::ToEven;
 
 #[derive(Debug, Clone)]
 pub struct ValueSlot(Gc<Mutex<RuntimeValue>>);
+
+pub trait DeepClone {
+    fn deep_clone(self, env: &mut VM) -> Self;
+}
 
 impl ValueSlot {
     #[inline]

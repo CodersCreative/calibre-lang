@@ -27,6 +27,18 @@ impl Display for VMMoveVar {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMClone {
+    pub dst: Reg,
+    pub value: Reg,
+}
+
+impl Display for VMClone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%r{} = CLONE %r{}", self.dst, self.value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VMDropVar {
     pub name: u16,
 }

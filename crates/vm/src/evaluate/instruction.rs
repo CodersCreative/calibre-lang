@@ -65,6 +65,7 @@ impl VMEvaluation for VMInstruction {
             VMInstruction::Ref(x) => x.run(vm, block, ip, prev_block),
             VMInstruction::Deref(x) => x.run(vm, block, ip, prev_block),
             VMInstruction::SetRef(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Clone(x) => x.run(vm, block, ip, prev_block),
 
             // Termination
             VMInstruction::Jump(x) => x.run(vm, block, ip, prev_block),

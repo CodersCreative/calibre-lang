@@ -19,7 +19,7 @@ use calibre_parser::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
             },
             loops::{AstLoop, LoopType},
-            memory::{AstDeref, AstDrop, AstMove, AstRef},
+            memory::{AstClone, AstDeref, AstDrop, AstMove, AstRef},
             scopes::AstScopeDef,
             spawn::AstSpawn,
             unary::AstNot,
@@ -336,6 +336,11 @@ pub struct MirMove {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirClone {
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirSpawn {
     pub value: Box<MiddleNode>,
 }
@@ -554,6 +559,7 @@ pub enum MiddleNodeType {
     RefStatement(MirRef),
     Drop(MirDrop),
     Move(MirMove),
+    Clone(MirClone),
     Spawn(MirSpawn),
     DerefStatement(MirDeref),
 
@@ -650,6 +656,9 @@ impl From<MiddleNodeType> for AstNodeType {
                         value: value.identifier.into(),
                     }),
                 )),
+            }),
+            MiddleNodeType::Clone(value) => AstNodeType::CloneExpression(AstClone {
+                value: Box::new((*value.value).into()),
             }),
             MiddleNodeType::Break(value) => AstNodeType::Break(AstBreak {
                 label: value.label.map(Into::into),

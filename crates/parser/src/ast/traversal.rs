@@ -14,7 +14,7 @@ use crate::ast::{
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstIter, AstLoop, LoopType},
         matching::{AstFnMatch, AstMatch, MatchBody},
-        memory::{AstDeref, AstMove, AstRef},
+        memory::{AstClone, AstDeref, AstMove, AstRef},
         misc::{AstImport, AstParen, AstTag, AstTest},
         scopes::AstScopeDef,
         spawn::{AstSelect, AstSpawn},
@@ -286,6 +286,11 @@ pub trait NodeVisitor {
                     value: Box::new(self.visit(*value)),
                 })
             }
+            AstNodeType::CloneExpression(AstClone { value }) => {
+                AstNodeType::CloneExpression(AstClone {
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::InDeclaration(AstIn { identifier, value }) => {
                 AstNodeType::InDeclaration(AstIn {
                     identifier: Box::new(self.visit(*identifier)),
@@ -546,7 +551,8 @@ pub trait NodeAnalyzer {
             | AstNodeType::DerefStatement(AstDeref { value })
             | AstNodeType::DestructureDeclaration(AstDeclareDestructure { value, .. })
             | AstNodeType::DestructureAssignment(AstAssignDestructure { value, .. })
-            | AstNodeType::MoveExpression(AstMove { value }) => self.analyze(value),
+            | AstNodeType::MoveExpression(AstMove { value })
+            | AstNodeType::CloneExpression(AstClone { value }) => self.analyze(value),
             AstNodeType::TupleLiteral(AstTuple { values }) => {
                 values.iter().all(|n| self.analyze(n))
             }

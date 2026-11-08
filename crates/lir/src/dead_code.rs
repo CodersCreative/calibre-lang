@@ -1,8 +1,9 @@
 use crate::{
     ast::{
-        LirAggregate, LirAs, LirAssign, LirBinary, LirCall, LirClosure, LirComparison, LirDeclare,
-        LirDeref, LirDiscriminant, LirEnum, LirIndex, LirIs, LirLValue, LirList, LirLoad,
-        LirMember, LirMove, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn, LirTerminator,
+        LirAggregate, LirAs, LirAssign, LirBinary, LirCall, LirClone, LirClosure, LirComparison,
+        LirDeclare, LirDeref, LirDiscriminant, LirEnum, LirIndex, LirIs, LirLValue, LirList,
+        LirLoad, LirMember, LirMove, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn,
+        LirTerminator,
     },
     environment::{LirFunction, LirGlobal, LirRegistry},
 };
@@ -387,6 +388,7 @@ impl LirNodeType {
             LirNodeType::Spawn(LirSpawn { value })
             | LirNodeType::Deref(LirDeref { value })
             | LirNodeType::Ref(LirRef { value })
+            | LirNodeType::Clone(LirClone { value })
             | LirNodeType::Discriminant(LirDiscriminant { value })
             | LirNodeType::Member(LirMember {
                 base: value,

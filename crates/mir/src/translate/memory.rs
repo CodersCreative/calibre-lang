@@ -1,5 +1,8 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref, MirDrop, MirMove, MirRef, types::MirDataType},
+    ast::{
+        MiddleNode, MiddleNodeType, MirClone, MirDeref, MirDrop, MirMove, MirRef,
+        types::MirDataType,
+    },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -15,7 +18,7 @@ use calibre_parser::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIdentifier, AstIndex, AstScope},
             declaration::AstDeclaration,
-            memory::{AstDeref, AstDrop, AstMove, AstRef},
+            memory::{AstClone, AstDeref, AstDrop, AstMove, AstRef},
         },
         types::ParserDataType,
     },
@@ -250,6 +253,34 @@ impl MirLowering for AstMove {
             }
             _ => self.value.lower(env, scope, span, data_type),
         }
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<MirDataType> {
+        self.value
+            .type_of(env, scope, span)
+            .map(|x| x.unwrap_all_refs().clone())
+    }
+}
+
+impl MirLowering for AstClone {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+        data_type: Option<MirDataType>,
+    ) -> Result<MiddleNode, MiddleErr> {
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::Clone(MirClone {
+                value: Box::new(self.value.lower(env, scope, span, data_type)?),
+            }),
+            span,
+        })
     }
 
     fn type_of(

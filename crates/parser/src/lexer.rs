@@ -226,6 +226,8 @@ pub enum Token<'a> {
     Test,
     #[token("move")]
     Move,
+    #[token("clone")]
+    Clone,
     #[token("spawn")]
     Spawn,
     #[token("spawn@")]
@@ -417,6 +419,7 @@ impl FromStr for Token<'static> {
             "Type" => Ok(Token::Type),
             "Test" => Ok(Token::Test),
             "Move" => Ok(Token::Move),
+            "Clone" => Ok(Token::Clone),
             "Spawn" => Ok(Token::Spawn),
             "AutoSpawn" => Ok(Token::AutoSpawn),
             "Defer" => Ok(Token::Defer),
@@ -560,6 +563,7 @@ impl<'a> Token<'a> {
             Token::Type => "Type",
             Token::Test => "Test",
             Token::Move => "Move",
+            Token::Clone => "Clone",
             Token::Spawn => "Spawn",
             Token::AutoSpawn => "AutoSpawn",
             Token::Defer => "Defer",

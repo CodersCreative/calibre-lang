@@ -18,7 +18,7 @@ use crate::{
             },
             loops::{AstIter, AstLoop},
             matching::{AstFnMatch, AstMatch},
-            memory::{AstDrop, AstMove},
+            memory::{AstClone, AstDrop, AstMove},
             misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::AstScopeDef,
             spawn::{AstSelect, AstSpawn},
@@ -223,12 +223,14 @@ impl<'a> AstNode {
                     AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
                 )));
 
-        let memory = select! {Token::Identifier(x) if x == "drop" => (), Token::Move => ()}
-            .rewind()
-            .ignore_then(choice((
-                AstDrop::parser(data.clone()).map(AstNodeType::Drop),
-                AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
-            )));
+        let memory =
+            select! {Token::Identifier(x) if x == "drop" => (), Token::Clone | Token::Move => ()}
+                .rewind()
+                .ignore_then(choice((
+                    AstDrop::parser(data.clone()).map(AstNodeType::Drop),
+                    AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
+                    AstClone::parser(data.clone()).map(AstNodeType::CloneExpression),
+                )));
 
         let dot_start = just(Token::Dot).rewind().ignore_then(choice((
             AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),

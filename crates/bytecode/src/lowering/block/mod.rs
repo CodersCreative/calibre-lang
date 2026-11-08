@@ -218,6 +218,7 @@ impl<'a> BlockLoweringCtx<'a> {
 
             LirNodeType::Spawn(x) => x.lower(self, span),
             LirNodeType::Move(x) => x.lower(self, span),
+            LirNodeType::Clone(x) => x.lower(self, span),
             LirNodeType::Drop(x) => x.lower(self, span),
             LirNodeType::Load(x) => x.lower(self, span),
 

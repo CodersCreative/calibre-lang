@@ -47,6 +47,7 @@ impl MirRenamable for MiddleNodeType {
             MiddleNodeType::Discriminant(value) => value.value.rename(state),
             MiddleNodeType::Emit(value) => value.value.rename(state),
             MiddleNodeType::Spawn(value) => value.value.rename(state),
+            MiddleNodeType::Clone(value) => value.value.rename(state),
             MiddleNodeType::RefStatement(MirRef {
                 mutability: _,
                 value,

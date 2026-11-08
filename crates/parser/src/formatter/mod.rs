@@ -266,6 +266,7 @@ impl AstFormatting for AstNode {
             AstNodeType::RefStatement(x) => x.format(formatter),
             AstNodeType::DerefStatement(x) => x.format(formatter),
             AstNodeType::MoveExpression(x) => x.format(formatter),
+            AstNodeType::CloneExpression(x) => x.format(formatter),
 
             // Access
             AstNodeType::FieldAccess(x) => x.format(formatter),

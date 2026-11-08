@@ -105,6 +105,11 @@ pub struct LirMove {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
+pub struct LirClone {
+    pub value: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirDrop {
     pub value: VariableKey,
 }
@@ -237,6 +242,7 @@ pub enum LirNodeType {
 
     Load(LirLoad),
     Move(LirMove),
+    Clone(LirClone),
     Drop(LirDrop),
     Spawn(LirSpawn),
 
@@ -414,6 +420,7 @@ impl Display for LirNodeType {
                 Self::Deref(LirDeref { value }) => format!("*{}", value),
                 Self::Drop(LirDrop { value }) => format!("drop {}", value),
                 Self::Move(LirMove { value }) => format!("move {}", value),
+                Self::Clone(LirClone { value }) => format!("clone {}", value),
                 Self::Enum(LirEnum {
                     name,
                     variant,

@@ -2,11 +2,14 @@ use crate::{
     VM,
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
-    value::{RuntimeValue, TerminateValue},
+    value::{DeepClone, RuntimeValue, TerminateValue},
 };
 use calibre_bytecode::{
     VMBlock,
-    instructions::memory::{VMDeref, VMRef, VMSetRef},
+    instructions::{
+        memory::{VMDeref, VMRef, VMSetRef},
+        variables::VMClone,
+    },
 };
 use calibre_lir::{FullyQualifiedPath, VariableKey, ast::BlockId};
 use tracing::instrument;
@@ -54,6 +57,24 @@ impl VMEvaluation for VMDeref {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let out = vm.resolve_value_from_ref(vm.get_reg_value(self.value))?;
+
+        vm.set_reg_value(self.dst, out);
+        Ok(TerminateValue::None)
+    }
+}
+
+impl VMEvaluation for VMClone {
+    #[instrument(skip_all)]
+    fn run(
+        &self,
+        vm: &mut VM,
+        _block: &VMBlock,
+        _ip: u32,
+        _prev_block: Option<BlockId>,
+    ) -> Result<TerminateValue, RuntimeError> {
+        let out = vm
+            .resolve_value_from_ref(vm.get_reg_value(self.value))?
+            .deep_clone(vm);
 
         vm.set_reg_value(self.dst, out);
         Ok(TerminateValue::None)

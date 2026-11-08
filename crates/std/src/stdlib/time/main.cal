@@ -24,11 +24,13 @@ impl DateTime {
 	const now := fn -> Self =>
 		return DateTime { ms : unix_now() }
 
+	@pure
 	const elapsed := fn (self : Self) -> Duration => 
 		return Duration {
 			ms : self.ms - DateTime.now().ms
 		}
 
+	@pure
 	const since := fn (self : Self, other : Self) -> Duration =>
 		return Duration {
 			ms : self.ms - other.ms

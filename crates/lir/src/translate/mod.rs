@@ -194,6 +194,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Spawn(x) => x.lower(self, span),
             MiddleNodeType::Drop(x) => x.lower(self, span),
             MiddleNodeType::Move(x) => x.lower(self, span),
+            MiddleNodeType::Clone(x) => x.lower(self, span),
             MiddleNodeType::Identifier(x) => x.lower(self, span),
             MiddleNodeType::VariableDeclaration(x) => x.lower(self, span),
 

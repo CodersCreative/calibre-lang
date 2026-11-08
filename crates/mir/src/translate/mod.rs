@@ -157,6 +157,7 @@ impl MirLowering for AstNode {
             AstNodeType::DerefStatement(x) => x.lower(env, scope, span, data_type),
             AstNodeType::Drop(x) => x.lower(env, scope, span, data_type),
             AstNodeType::MoveExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::CloneExpression(x) => x.lower(env, scope, span, data_type),
 
             // Matching
             AstNodeType::MatchStatement(x) => x.lower(env, scope, span, data_type),

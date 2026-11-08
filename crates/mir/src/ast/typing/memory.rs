@@ -1,5 +1,8 @@
 use crate::{
-    ast::{MirDeref, MirDrop, MirMove, MirRef, MirSpawn, types::MirDataType, typing::MirTypable},
+    ast::{
+        MirClone, MirDeref, MirDrop, MirMove, MirRef, MirSpawn, types::MirDataType,
+        typing::MirTypable,
+    },
     environment::MiddleEnvironment,
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
@@ -17,6 +20,22 @@ impl MirTypable for MirMove {
             .variables
             .get(&self.identifier)
             .map(|x| x.data_type.unwrap_all_refs().clone())
+    }
+}
+
+impl MirTypable for MirClone {
+    fn mir_type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<MirDataType> {
+        Some(
+            self.value
+                .mir_type_of(env, scope, span)?
+                .unwrap_all_refs()
+                .clone(),
+        )
     }
 }
 

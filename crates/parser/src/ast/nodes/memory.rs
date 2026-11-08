@@ -21,3 +21,8 @@ pub struct AstDrop {
 pub struct AstMove {
     pub value: Box<AstNode>,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstClone {
+    pub value: Box<AstNode>,
+}

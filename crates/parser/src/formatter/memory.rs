@@ -1,5 +1,5 @@
 use crate::{
-    ast::nodes::memory::{AstDeref, AstDrop, AstMove, AstRef},
+    ast::nodes::memory::{AstClone, AstDeref, AstDrop, AstMove, AstRef},
     formatter::{AstFormatting, Formatter},
 };
 
@@ -32,5 +32,13 @@ impl AstFormatting for AstMove {
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!("move {}", self.value.format(formatter))
+    }
+}
+
+impl AstFormatting for AstClone {
+    type PreFormat = ();
+
+    fn narrow_format(&self, formatter: &mut Formatter) -> String {
+        format!("clone {}", self.value.format(formatter))
     }
 }

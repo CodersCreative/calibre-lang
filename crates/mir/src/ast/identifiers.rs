@@ -2,9 +2,9 @@ use crate::{
     MirVarKeysUsed,
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
-        MirBreak, MirCall, MirComparison, MirConditional, MirDeref, MirDiscriminant, MirDrop,
-        MirEmit, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop,
-        MirMove, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+        MirBreak, MirCall, MirClone, MirComparison, MirConditional, MirDeref, MirDiscriminant,
+        MirDrop, MirEmit, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList,
+        MirLoop, MirMove, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
     symbols::VariableKey,
 };
@@ -64,6 +64,7 @@ impl MirVarKeysUsed for MiddleNode {
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
             })
+            | MiddleNodeType::Clone(MirClone { value })
             | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_used(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::BinaryExpression(MirBinary {
@@ -204,6 +205,7 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::Spawn(MirSpawn { value })
             | MiddleNodeType::Discriminant(MirDiscriminant { value })
+            | MiddleNodeType::Clone(MirClone { value })
             | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type: _,
@@ -379,6 +381,7 @@ impl MiddleNode {
             })
             | MiddleNodeType::LoopDeclaration(MirLoop { body: value, .. })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
+            | MiddleNodeType::Clone(MirClone { value })
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
             }) => value.identifiers_referenced(include_functions, in_ref),

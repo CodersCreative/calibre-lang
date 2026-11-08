@@ -44,6 +44,7 @@ impl MirTypable for MiddleNode {
             MiddleNodeType::Spawn(x) => x.mir_type_of(env, scope, span),
             MiddleNodeType::Drop(x) => x.mir_type_of(env, scope, span),
             MiddleNodeType::Move(x) => x.mir_type_of(env, scope, span),
+            MiddleNodeType::Clone(x) => x.mir_type_of(env, scope, span),
             MiddleNodeType::Identifier(x) => x.mir_type_of(env, scope, span),
             MiddleNodeType::VariableDeclaration(x) => x.mir_type_of(env, scope, span),
 

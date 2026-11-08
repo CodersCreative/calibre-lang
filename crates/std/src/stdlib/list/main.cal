@@ -24,9 +24,6 @@ impl<T> list:<T> {
 	};
 
 	@pure
-	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[self[i]! for i in len(self)];
-
-	@pure
 	const contains := fn (self : &list:<T>, needle : &T) -> bool => {
 		for i in len(self) => if self[i]! = needle => return true;
 		return false;

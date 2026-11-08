@@ -25,7 +25,7 @@ use crate::{
             },
             loops::{AstIter, AstLoop, LoopType},
             matching::{AstFnMatch, AstMatch},
-            memory::{AstDeref, AstDrop, AstMove, AstRef},
+            memory::{AstClone, AstDeref, AstDrop, AstMove, AstRef},
             misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::AstScopeDef,
             spawn::{AstSelect, AstSpawn},
@@ -562,6 +562,7 @@ pub enum AstNodeType {
     DerefStatement(AstDeref),
     Drop(AstDrop),
     MoveExpression(AstMove),
+    CloneExpression(AstClone),
 
     // Access
     Identifier(AstIdentifier),

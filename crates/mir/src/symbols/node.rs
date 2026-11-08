@@ -117,6 +117,7 @@ impl MiddleEnvironment {
             AstNodeType::MoveExpression(x) => x.type_of(self, scope, node.span),
             AstNodeType::RefStatement(x) => x.type_of(self, scope, node.span),
             AstNodeType::DerefStatement(x) => x.type_of(self, scope, node.span),
+            AstNodeType::CloneExpression(x) => x.type_of(self, scope, node.span),
 
             // Matching
             AstNodeType::MatchStatement(x) => x.type_of(self, scope, node.span),

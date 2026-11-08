@@ -8,7 +8,7 @@ use crate::{
         memory::{VMDeref, VMRef, VMSetRef},
         registers::{VMCopy, VMLoadRegRef},
         termination::{VMBranch, VMJump, VMReturn},
-        variables::{VMLoadVarRef, VMStoreVar},
+        variables::{VMClone, VMLoadVarRef, VMStoreVar},
     },
 };
 use literals::VMLoadLiteral;
@@ -67,6 +67,7 @@ pub enum VMInstruction {
     Ref(VMRef),
     Deref(VMDeref),
     SetRef(VMSetRef),
+    Clone(VMClone),
 
     // Termination
     Jump(VMJump),
@@ -100,6 +101,7 @@ impl VMInstruction {
         | VMInstruction::Ref(VMRef { dst, .. })
         | VMInstruction::Deref(VMDeref { dst, .. })
         | VMInstruction::SetRef(VMSetRef { dst, .. })
+        | VMInstruction::Clone(VMClone { dst, .. })
         // Literals
         | VMInstruction::LoadLiteral(VMLoadLiteral { dst, .. })
         | VMInstruction::Aggregate(VMAggregate { dst, .. })
@@ -139,6 +141,7 @@ impl VMInstruction {
         | VMInstruction::Ref(VMRef { dst, .. })
         | VMInstruction::Deref(VMDeref { dst, .. })
         | VMInstruction::SetRef(VMSetRef { dst, .. })
+        | VMInstruction::Clone(VMClone { dst, .. })
         // Literals
         | VMInstruction::LoadLiteral(VMLoadLiteral { dst, .. })
         | VMInstruction::Aggregate(VMAggregate { dst, .. })
@@ -181,7 +184,8 @@ impl VMInstruction {
             | VMInstruction::LoadRegRef(VMLoadRegRef { src, .. })
             | VMInstruction::Spawn(VMSpawn { callee: src, .. })
             | VMInstruction::Is(VMIs { src, .. })
-            | VMInstruction::As(VMAs { src, .. }) => add_use(*src),
+            | VMInstruction::As(VMAs { src, .. })
+            | VMInstruction::Clone(VMClone { value: src, .. }) => add_use(*src),
             VMInstruction::StoreVar(VMStoreVar { src, .. }) => add_use(*src),
             VMInstruction::Call(VMCall { callee, args, .. }) => {
                 add_use(*callee);
@@ -281,6 +285,7 @@ impl Display for VMInstruction {
             VMInstruction::Ref(x) => x.fmt(f),
             VMInstruction::Deref(x) => x.fmt(f),
             VMInstruction::SetRef(x) => x.fmt(f),
+            VMInstruction::Clone(x) => x.fmt(f),
 
             // Termination
             VMInstruction::Jump(x) => x.fmt(f),

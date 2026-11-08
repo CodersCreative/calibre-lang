@@ -8,12 +8,14 @@ Drop
 */
 
 use crate::{
-    ast::{LirDeref, LirDrop, LirLValue, LirMove, LirNodeType, LirRef, LirRefLoad, LirSpawn},
+    ast::{
+        LirClone, LirDeref, LirDrop, LirLValue, LirMove, LirNodeType, LirRef, LirRefLoad, LirSpawn,
+    },
     environment::LirEnvironment,
     translate::LirLowering,
 };
 use calibre_mir::ast::{
-    MiddleNodeType, MirDeref, MirDrop, MirIdentifier, MirMove, MirRef, MirSpawn,
+    MiddleNodeType, MirClone, MirDeref, MirDrop, MirIdentifier, MirMove, MirRef, MirSpawn,
 };
 use calibre_parser::Span;
 
@@ -22,6 +24,15 @@ impl LirLowering for MirMove {
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Move(LirMove {
             value: self.identifier,
+        })
+    }
+}
+
+impl LirLowering for MirClone {
+    #[inline(always)]
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> crate::ast::LirNodeType {
+        LirNodeType::Clone(LirClone {
+            value: Box::new(env.lower_node(*self.value)),
         })
     }
 }

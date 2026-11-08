@@ -16,13 +16,13 @@ use crate::{
         functions::{VMCall, VMCallSelf},
         memory::{VMDeref, VMRef},
         registers::VMCopy,
-        variables::VMLoadVarRef,
+        variables::{VMClone, VMLoadVarRef},
     },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
-    LirCall, LirDeref, LirDiscriminant, LirIndex, LirLoad, LirMember, LirMove, LirNodeType, LirRef,
-    LirRefLoad,
+    LirCall, LirClone, LirDeref, LirDiscriminant, LirIndex, LirLoad, LirMember, LirMove,
+    LirNodeType, LirRef, LirRefLoad,
 };
 use calibre_parser::Span;
 
@@ -155,6 +155,16 @@ impl VMLowering for LirRefLoad {
             );
         }
 
+        dst
+    }
+}
+
+impl VMLowering for LirClone {
+    #[inline(always)]
+    fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
+        let src = env.lower_node(*self.value, span);
+        let dst = env.alloc_reg();
+        env.emit(VMInstruction::Clone(VMClone { dst, value: src }), span);
         dst
     }
 }

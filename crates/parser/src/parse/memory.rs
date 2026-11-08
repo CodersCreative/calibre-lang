@@ -1,5 +1,5 @@
 use crate::ast::RefMutability;
-use crate::ast::nodes::memory::{AstDrop, AstMove};
+use crate::ast::nodes::memory::{AstClone, AstDrop, AstMove};
 use crate::parse::StatementData;
 use crate::{
     lexer::Token,
@@ -45,6 +45,19 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
         just(Token::Move)
             .ignore_then(data.node.clone())
             .map(|value| AstMove {
+                value: Box::new(value),
+            })
+    }
+}
+
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstClone {
+    type Data = StatementData<'a, I>;
+
+    #[inline(always)]
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
+        just(Token::Clone)
+            .ignore_then(data.node.clone())
+            .map(|value| AstClone {
                 value: Box::new(value),
             })
     }

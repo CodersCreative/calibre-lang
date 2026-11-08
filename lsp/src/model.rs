@@ -13,6 +13,7 @@ pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
     match keyword {
         "test" => "Declare a test.",
         "move" => "Move a variable.",
+        "clone" => "Forcibly clone a variable.",
         "defer" => "Delay running a statement.",
         "fn" => "Declare a function.",
         "let" => "Declare an immutable local variable.",
