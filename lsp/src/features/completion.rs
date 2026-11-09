@@ -132,7 +132,7 @@ impl CalibreLanguageServer {
             BlockComment,
         }
 
-        let limit = Self::position_to_byte_offset(text, position).min(text.len());
+        let limit = Self::position_to_offset(text, position).min(text.len());
         let bytes = text.as_bytes();
         let mut mode = Mode::Normal;
         let mut escaped = false;

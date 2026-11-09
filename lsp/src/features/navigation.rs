@@ -8,6 +8,7 @@ use calibre_mir::{
     scoping::ScopeId,
     symbols::resolve::{Key, ResolutionOptions},
 };
+use calibre_parser::lexer::Token;
 use ustr::Ustr;
 
 impl CalibreLanguageServer {
@@ -23,7 +24,7 @@ impl CalibreLanguageServer {
             current_scope: &mut ScopeId,
             smallest_span: &mut u32,
         ) {
-            let range = CalibreLanguageServer::lsp_range(node.span, text);
+            let range = CalibreLanguageServer::span_to_range(node.span, text);
             if !CalibreLanguageServer::is_position_within_range(pos, range) {
                 return;
             }
@@ -136,36 +137,30 @@ impl CalibreLanguageServer {
     }
 
     pub(super) fn word_at_position(text: &str, position: Position) -> Option<String> {
-        fn is_ident_char(ch: char) -> bool {
-            ch.is_ascii_alphanumeric() || ch == '_'
+        let lexer = Parser::default();
+        let tokens = lexer
+            .lex(text)
+            .map_err(|errors| {
+                errors
+                    .into_iter()
+                    .next()
+                    .map(|error| error.message_with_hint())
+                    .unwrap_or_else(|| "failed to lex template".into())
+            })
+            .ok()?;
+
+        let offset = CalibreLanguageServer::position_to_offset(text, position);
+
+        for (token, span) in tokens {
+            if let Token::Identifier(identifier) = token
+                && offset >= span.start
+                && offset <= span.end
+            {
+                return Some(identifier.to_string());
+            }
         }
 
-        let line = text.lines().nth(position.line as usize)?;
-        let chars: Vec<char> = line.chars().collect();
-        if chars.is_empty() {
-            return None;
-        }
-
-        let cursor = usize::min(position.character as usize, chars.len());
-        let pivot = if cursor < chars.len() && is_ident_char(chars[cursor]) {
-            cursor
-        } else if cursor > 0 && is_ident_char(chars[cursor - 1]) {
-            cursor - 1
-        } else {
-            return None;
-        };
-
-        let mut start = pivot;
-        while start > 0 && is_ident_char(chars[start - 1]) {
-            start -= 1;
-        }
-
-        let mut end = pivot;
-        while end + 1 < chars.len() && is_ident_char(chars[end + 1]) {
-            end += 1;
-        }
-
-        Some(chars[start..=end].iter().collect())
+        None
     }
 
     pub(super) fn resolve_definition_for_snapshot(
@@ -197,7 +192,7 @@ impl CalibreLanguageServer {
                         {
                             return Some(GotoDefinitionResponse::Scalar(Location::new(
                                 uri,
-                                Self::lsp_range(loc.span, target_text),
+                                Self::span_to_range(loc.span, target_text),
                             )));
                         }
                     }
@@ -209,7 +204,7 @@ impl CalibreLanguageServer {
                         {
                             return Some(GotoDefinitionResponse::Scalar(Location::new(
                                 uri,
-                                Self::lsp_range(loc.span, target_text),
+                                Self::span_to_range(loc.span, target_text),
                             )));
                         }
                     }
@@ -291,45 +286,37 @@ impl CalibreLanguageServer {
         None
     }
 
-    pub(super) fn is_ident_byte(b: u8) -> bool {
-        (b as char).is_ascii_alphanumeric() || b == b'_'
-    }
-
     pub(super) fn find_word_occurrences(text: &str, word: &str) -> Vec<Range> {
         if word.is_empty() {
             return Vec::new();
         }
 
-        let mut ranges = Vec::new();
-        let mut search_from = 0usize;
+        let lexer = Parser::default();
+        let Ok(tokens) = lexer.lex(text).map_err(|errors| {
+            errors
+                .into_iter()
+                .next()
+                .map(|error| error.message_with_hint())
+                .unwrap_or_else(|| "failed to lex template".into())
+        }) else {
+            return Vec::new();
+        };
 
-        while let Some(rel_idx) = text[search_from..].find(word) {
-            let start = search_from + rel_idx;
-            let end = start + word.len();
-
-            let prev_ok = if start == 0 {
-                true
-            } else {
-                !Self::is_ident_byte(text.as_bytes()[start - 1])
-            };
-
-            let next_ok = if end >= text.len() {
-                true
-            } else {
-                !Self::is_ident_byte(text.as_bytes()[end])
-            };
-
-            if prev_ok && next_ok {
-                ranges.push(Range {
-                    start: Self::byte_offset_to_position(text, start),
-                    end: Self::byte_offset_to_position(text, end),
-                });
-            }
-
-            search_from = start.saturating_add(1);
-        }
-
-        ranges
+        tokens
+            .into_iter()
+            .filter_map(|(token, span)| {
+                if let Token::Identifier(identifier) = token
+                    && identifier == word
+                {
+                    Some(CalibreLanguageServer::span_to_range(
+                        CalSpan::from(span),
+                        text,
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub(super) fn semantic_canonical_symbol(

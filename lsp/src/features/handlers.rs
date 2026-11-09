@@ -403,7 +403,7 @@ impl LanguageServer for CalibreLanguageServer {
                     return None;
                 }
 
-                let end = CalibreLanguageServer::byte_offset_to_position(&contents, contents.len());
+                let end = CalibreLanguageServer::offset_to_position(&contents, contents.len());
                 Some(vec![TextEdit {
                     range: Range {
                         start: Position {
@@ -439,7 +439,7 @@ impl LanguageServer for CalibreLanguageServer {
 
             let edits = smol::unblock(move || {
                 let mut formatter = CalibreLanguageServer::formatter_from_options(&options);
-                let cal_span = CalibreLanguageServer::lsp_range_to_cal_span(range, &contents);
+                let cal_span = CalibreLanguageServer::range_to_span(range, &contents);
 
                 let Ok(formatted_slice) = formatter.start_format(&contents, Some(cal_span)) else {
                     return None;

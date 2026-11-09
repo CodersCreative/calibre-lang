@@ -1,3 +1,5 @@
+use async_lsp::lsp_types::notification::PublishDiagnostics;
+
 use super::*;
 
 impl CalibreLanguageServer {
@@ -5,7 +7,7 @@ impl CalibreLanguageServer {
         errors
             .iter()
             .map(|err| Diagnostic {
-                range: Self::lsp_range(err.span(), text),
+                range: Self::span_to_range(err.span(), text),
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String(err.code().to_string())),
                 source: Some(err.step().to_string()),
@@ -21,13 +23,13 @@ impl CalibreLanguageServer {
                 let mut diagnostics = Self::semantic_diagnostics(inner, text);
                 if diagnostics.is_empty() {
                     diagnostics.push(Diagnostic {
-                        range: Self::lsp_range(*span, text),
+                        range: Self::span_to_range(*span, text),
                         severity: Some(DiagnosticSeverity::ERROR),
                         message: inner.to_string(),
                         ..Diagnostic::default()
                     });
                 } else {
-                    diagnostics[0].range = Self::lsp_range(*span, text);
+                    diagnostics[0].range = Self::span_to_range(*span, text);
                 }
                 diagnostics
             }
@@ -85,7 +87,7 @@ impl CalibreLanguageServer {
     ) {
         let _ = self
             .client
-            .notify::<notification::PublishDiagnostics>(PublishDiagnosticsParams {
+            .notify::<PublishDiagnostics>(PublishDiagnosticsParams {
                 uri,
                 diagnostics,
                 version,

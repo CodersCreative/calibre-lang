@@ -11,7 +11,7 @@ impl CalibreLanguageServer {
         }
     }
 
-    pub(super) fn path_from_url(uri: &Url) -> Option<std::path::PathBuf> {
+    pub(super) fn path_from_url(uri: &Url) -> Option<PathBuf> {
         uri.to_file_path().ok()
     }
 
@@ -63,7 +63,7 @@ impl CalibreLanguageServer {
         }
     }
 
-    pub(super) fn byte_offset_to_position(text: &str, offset: usize) -> Position {
+    pub(super) fn offset_to_position(text: &str, offset: usize) -> Position {
         let mut line = 0u32;
         let mut character = 0u32;
 
@@ -83,10 +83,17 @@ impl CalibreLanguageServer {
         Position { line, character }
     }
 
-    pub(super) fn lsp_range(span: CalSpan, text: &str) -> Range {
+    pub(super) fn span_to_range(span: CalSpan, text: &str) -> Range {
         Range {
-            start: Self::byte_offset_to_position(text, span.from),
-            end: Self::byte_offset_to_position(text, span.to),
+            start: Self::offset_to_position(text, span.from),
+            end: Self::offset_to_position(text, span.to),
+        }
+    }
+
+    pub(super) fn range_to_span(range: Range, text: &str) -> CalSpan {
+        CalSpan {
+            from: Self::position_to_offset(text, range.start),
+            to: Self::position_to_offset(text, range.end),
         }
     }
 
@@ -120,7 +127,7 @@ impl CalibreLanguageServer {
             .unwrap_or(line.len())
     }
 
-    pub(super) fn position_to_byte_offset(text: &str, position: Position) -> usize {
+    pub(super) fn position_to_offset(text: &str, position: Position) -> usize {
         let mut offset = 0usize;
         let mut lines = text.split('\n');
 
@@ -151,8 +158,8 @@ impl CalibreLanguageServer {
             return change.text.clone();
         };
 
-        let start = Self::position_to_byte_offset(original_text, range.start);
-        let end = Self::position_to_byte_offset(original_text, range.end);
+        let start = Self::position_to_offset(original_text, range.start);
+        let end = Self::position_to_offset(original_text, range.end);
 
         if start > end || end > original_text.len() {
             return original_text.to_string();

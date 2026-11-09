@@ -1,13 +1,6 @@
 use super::*;
 
 impl CalibreLanguageServer {
-    pub(super) fn lsp_range_to_cal_span(range: Range, text: &str) -> CalSpan {
-        CalSpan {
-            from: Self::position_to_byte_offset(text, range.start),
-            to: Self::position_to_byte_offset(text, range.end),
-        }
-    }
-
     pub(super) fn parses_cleanly(text: &str) -> bool {
         let mut parser = Parser::default();
         let _ = parser.produce_ast(text);
@@ -19,8 +12,8 @@ impl CalibreLanguageServer {
         range: Range,
         replacement: &str,
     ) -> Option<String> {
-        let start = Self::position_to_byte_offset(contents, range.start);
-        let end = Self::position_to_byte_offset(contents, range.end);
+        let start = Self::position_to_offset(contents, range.start);
+        let end = Self::position_to_offset(contents, range.end);
 
         if start > end || end > contents.len() {
             return None;
