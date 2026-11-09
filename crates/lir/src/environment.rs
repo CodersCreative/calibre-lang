@@ -1,12 +1,12 @@
 use crate::ast::{BlockId, LirBlock, LirNode, LirTerminator};
 use calibre_mir::{
-    ast::types::MirDataType,
+    ast::{MirFunctionParam, types::MirDataType},
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
     symbols::{TypeKey, VariableKey, resolve::Key},
     typing::MiddleTypeDefType,
 };
-use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::{ObjectMap, nodes::VarType};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -85,9 +85,26 @@ impl Display for LirGlobal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LirFunctionParam {
+    pub var_type: VarType,
+    pub identifier: VariableKey,
+    pub data_type: MirDataType,
+}
+
+impl From<MirFunctionParam> for LirFunctionParam {
+    fn from(value: MirFunctionParam) -> Self {
+        LirFunctionParam {
+            var_type: value.var_type,
+            identifier: value.identifier,
+            data_type: value.data_type,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LirFunction {
     pub name: VariableKey,
-    pub params: Box<[(VariableKey, MirDataType)]>,
+    pub params: Box<[LirFunctionParam]>,
     pub captures: Box<[(VariableKey, MirDataType)]>,
     pub return_type: MirDataType,
     pub blocks: Box<[Option<LirBlock>]>,
@@ -102,7 +119,10 @@ impl Display for LirFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut txt = format!("const {} = fn(", self.name);
         for param in &self.params {
-            txt.push_str(&format!("{} : {}, ", param.0, param.1));
+            txt.push_str(&format!(
+                "{} {} : {}, ",
+                param.var_type, param.identifier, param.data_type
+            ));
         }
 
         txt = txt.trim_end().trim_end_matches(",").to_string();

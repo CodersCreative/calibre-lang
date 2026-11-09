@@ -1,7 +1,8 @@
 use crate::{PhiNode, Reg};
 use calibre_lir::{
-    MirDataType, VariableKey,
+    VariableKey,
     ast::{BlockId, LirBlock, LirTerminator},
+    environment::LirFunctionParam,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -87,7 +88,7 @@ impl SSABuilder {
         }
     }
 
-    pub fn build(&mut self, blocks: &[Option<LirBlock>], params: &[(VariableKey, MirDataType)]) {
+    pub fn build(&mut self, blocks: &[Option<LirBlock>], params: &[LirFunctionParam]) {
         let mut scratch_in: FxHashMap<VariableKey, Reg> = FxHashMap::default();
         let mut scratch_out: FxHashMap<VariableKey, Reg> = FxHashMap::default();
         let mut changed = true;
@@ -102,8 +103,8 @@ impl SSABuilder {
                 scratch_in.clear();
 
                 if preds.len() == 1 && preds[0].0 == u32::MAX {
-                    for ((name, _), &reg) in params.iter().zip(self.param_regs.iter()) {
-                        scratch_in.insert(name.clone(), reg);
+                    for (param, &reg) in params.iter().zip(self.param_regs.iter()) {
+                        scratch_in.insert(param.identifier.clone(), reg);
                     }
                 } else {
                     let locals = std::mem::take(&mut self.locals);

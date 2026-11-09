@@ -6,10 +6,10 @@ use crate::instructions::{
 use calibre_lir::{
     Key, MirDataType, TypeKey, VariableKey,
     ast::{BlockId, LirLiteral},
-    environment::{LirGlobal, LirRegistry},
+    environment::{LirFunctionParam, LirGlobal, LirRegistry},
 };
-use calibre_parser::Span;
 use calibre_parser::ast::idents::ParserText;
+use calibre_parser::{Span, ast::nodes::VarType};
 use indextree::NodeId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -109,9 +109,26 @@ impl From<LirGlobal> for VMGlobal {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VMFunctionParam {
+    pub var_type: VarType,
+    pub is_ref: bool,
+    pub identifier: VariableKey,
+}
+
+impl From<LirFunctionParam> for VMFunctionParam {
+    fn from(value: LirFunctionParam) -> Self {
+        Self {
+            var_type: value.var_type,
+            is_ref: value.data_type.is_ref(),
+            identifier: value.identifier,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMFunction {
     pub name: VariableKey,
-    pub params: Box<[VariableKey]>,
+    pub params: Box<[VMFunctionParam]>,
     #[serde(skip)]
     pub param_names: FxHashSet<VariableKey>,
     pub captures: Box<[VariableKey]>,
@@ -133,16 +150,17 @@ pub struct VMFunction {
 impl VMFunction {
     pub fn rename(mut self, mut declared: UstrMap<Ustr>) -> Self {
         for param in self.params.iter_mut() {
-            let param_name = *param.name();
+            let param_name = *param.identifier.name();
             let new_name = Ustr::from(&format!("{}->{}", param_name, fastrand::u32(0..u32::MAX)));
             declared.insert(param_name, new_name);
-            let mut new_path = (*param.fully_qualified_path).clone();
+            let mut new_path = (*param.identifier.fully_qualified_path).clone();
             new_path.name = Some(new_name);
             let new_key = VariableKey {
                 fully_qualified_path: Arc::new(new_path),
-                shadow_counter: param.shadow_counter,
+                shadow_counter: param.identifier.shadow_counter,
             };
-            *param = new_key;
+
+            param.identifier = new_key;
         }
 
         for block in self.blocks.iter_mut().flatten() {
@@ -212,9 +230,11 @@ impl Display for VMFunction {
             },
             self.name
         );
+
         for param in &self.params {
-            txt.push_str(&format!("{}, ", param));
+            txt.push_str(&format!("{} {}, ", param.var_type, param.identifier));
         }
+
         txt = txt.trim_end().trim_end_matches(",").to_string();
         txt.push(')');
 

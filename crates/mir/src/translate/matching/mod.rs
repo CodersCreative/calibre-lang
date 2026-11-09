@@ -308,7 +308,7 @@ pub(crate) fn ast_fn_match_to_function(value: AstFnMatch, span: Span) -> AstFunc
                     AstNodeType::MatchStatement(AstMatch {
                         value: Some(Box::new(AstNode::identifier(
                             span,
-                            value.header.parameters[0].0.clone(),
+                            value.header.parameters[0].identifier.clone(),
                         ))),
                         body: value.body,
                     }),

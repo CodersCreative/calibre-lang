@@ -1,6 +1,5 @@
-use async_lsp::lsp_types::HoverParams;
-
 use super::*;
+use async_lsp::lsp_types::HoverParams;
 
 impl LanguageServer for CalibreLanguageServer {
     type Error = ResponseError;
@@ -62,6 +61,7 @@ impl LanguageServer for CalibreLanguageServer {
                 message: "calibre-lsp rewrite bootstrap initialized".to_string(),
             },
         );
+
         ControlFlow::Continue(())
     }
 
@@ -87,10 +87,12 @@ impl LanguageServer for CalibreLanguageServer {
 
     fn did_save(&mut self, params: DidSaveTextDocumentParams) -> Self::NotifyResult {
         let uri = params.text_document.uri;
+
         if let Some(text) = params.text {
             let version = self.documents.get(&uri).map(|doc| doc.version).unwrap_or(0);
             self.insert_document_state(uri.clone(), version, text);
         }
+
         self.enqueue_diagnostics(&uri);
         ControlFlow::Continue(())
     }
@@ -111,6 +113,7 @@ impl LanguageServer for CalibreLanguageServer {
             .text_document
             .uri
             .clone();
+
         let position = params.text_document_position_params.position;
         let hover = self.hover_for(&uri, position);
         Box::pin(ready(Ok(hover)))
@@ -165,13 +168,16 @@ impl LanguageServer for CalibreLanguageServer {
             let locations = smol::unblock(move || {
                 let canonical =
                     CalibreLanguageServer::semantic_canonical_symbol(&uri, &text, position);
+
                 if let Some(canonical) = canonical {
                     let mut semantic = Vec::new();
+
                     for (doc_uri, doc_text) in &document_snapshot {
                         semantic.extend(CalibreLanguageServer::semantic_references_in_document(
                             doc_uri, doc_text, &canonical,
                         ));
                     }
+
                     if !semantic.is_empty() {
                         return semantic;
                     }
@@ -180,13 +186,15 @@ impl LanguageServer for CalibreLanguageServer {
                 let Some(word) = CalibreLanguageServer::word_at_position(&text, position) else {
                     return Vec::new();
                 };
-                let mut fallback = Vec::new();
-                for (doc_uri, doc_text) in &document_snapshot {
-                    for range in CalibreLanguageServer::find_word_occurrences(doc_text, &word) {
-                        fallback.push(Location::new(doc_uri.clone(), range));
-                    }
-                }
-                fallback
+
+                document_snapshot
+                    .iter()
+                    .flat_map(|(doc_uri, doc_text)| {
+                        CalibreLanguageServer::find_word_occurrences(doc_text, &word)
+                            .into_iter()
+                            .map(|range| Location::new(doc_uri.clone(), range))
+                    })
+                    .collect()
             })
             .await;
 
@@ -242,6 +250,7 @@ impl LanguageServer for CalibreLanguageServer {
                 let Some(word) = CalibreLanguageServer::word_at_position(&text, position) else {
                     return per_file;
                 };
+
                 for (doc_uri, doc_text) in &document_snapshot {
                     for range in CalibreLanguageServer::find_word_occurrences(doc_text, &word) {
                         per_file.entry(doc_uri.clone()).or_default().push(TextEdit {
@@ -250,6 +259,7 @@ impl LanguageServer for CalibreLanguageServer {
                         });
                     }
                 }
+
                 per_file
             })
             .await;
@@ -292,8 +302,10 @@ impl LanguageServer for CalibreLanguageServer {
                     let mut parser = Parser::default();
                     parser.set_source_path(Some(path.clone()));
                     let ast = parser.produce_ast(&text);
+
                     let (mut env, scope, middle_ast) =
                         MiddleEnvironment::new_and_evaluate(ast, path, Vec::new(), false, true);
+
                     let current_scope =
                         CalibreLanguageServer::find_scope_at_with(&middle_ast, scope, position);
 
@@ -329,6 +341,7 @@ impl LanguageServer for CalibreLanguageServer {
                 for item in CalibreLanguageServer::lexical_completion_items(all_texts, prefix) {
                     out.entry(item.label.clone()).or_insert(item);
                 }
+
                 for item in CalibreLanguageServer::keyword_completion_items(prefix) {
                     out.entry(item.label.clone()).or_insert(item);
                 }
@@ -385,6 +398,7 @@ impl LanguageServer for CalibreLanguageServer {
                 let Ok(formatted) = formatter.start_format(&contents, None) else {
                     return None;
                 };
+
                 if !CalibreLanguageServer::parses_cleanly(&formatted) {
                     return None;
                 }
@@ -418,25 +432,29 @@ impl LanguageServer for CalibreLanguageServer {
 
         Box::pin(async move {
             let contents = contents.unwrap_or_default();
+
             if contents.is_empty() {
                 return Ok(None);
             }
 
             let edits = smol::unblock(move || {
                 let mut formatter = CalibreLanguageServer::formatter_from_options(&options);
-
                 let cal_span = CalibreLanguageServer::lsp_range_to_cal_span(range, &contents);
+
                 let Ok(formatted_slice) = formatter.start_format(&contents, Some(cal_span)) else {
                     return None;
                 };
+
                 let updated = CalibreLanguageServer::apply_range_replacement(
                     &contents,
                     range,
                     &formatted_slice,
                 )?;
+
                 if !CalibreLanguageServer::parses_cleanly(&updated) {
                     return None;
                 }
+
                 Some(vec![TextEdit {
                     range,
                     new_text: formatted_slice,

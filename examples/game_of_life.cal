@@ -24,14 +24,14 @@ impl Grid {
             rows : 8u,
             cols : 8u,
             grid : [
-            [false, true, false, false, false, false, false, false],
-            [false, false, true, false, false, false, false, false],
-            [true, true, true, false, false, false, false, false],
-            [false for 8],
-            [false for 8],
-            [false for 8],
-            [false for 8],       
-            [false for 8],
+                [false, true, false, false, false, false, false, false],
+                [false, false, true, false, false, false, false, false],
+                [true, true, true, false, false, false, false, false],
+                [false for 8],
+                [false for 8],
+                [false for 8],
+                [false for 8],
+                [false for 8],
             ]
         };
 

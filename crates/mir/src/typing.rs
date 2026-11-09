@@ -179,9 +179,16 @@ impl Typing {
         out
     }
 
+    #[instrument(skip_all)]
+    pub fn find_object_from_type(&self, data_type: &MirDataType) -> Option<&MiddleObject> {
+        match data_type {
+            MirDataType::Struct { identifier, .. } => self.find_object_from_type_key(identifier),
+            _ => None,
+        }
+    }
+
     #[instrument(skip_all, fields(struct_name = %struct_name))]
-    pub fn find_object_for_struct_name(&self, struct_name: &TypeKey) -> Option<&MiddleObject> {
-        trace!("finding object for struct name");
+    pub fn find_object_from_type_key(&self, struct_name: &TypeKey) -> Option<&MiddleObject> {
         self.objects.get(struct_name)
     }
 

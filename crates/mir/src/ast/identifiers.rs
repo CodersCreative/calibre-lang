@@ -85,6 +85,7 @@ impl MirVarKeysUsed for MiddleNode {
             | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
+                ..
             })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
@@ -252,6 +253,7 @@ impl MiddleNode {
             | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
+                ..
             })
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
@@ -308,7 +310,7 @@ impl MiddleNode {
                 parameters, body, ..
             }) => {
                 let mut declared = body.identifiers_declared(include_functions);
-                declared.extend(parameters.iter().map(|x| x.0.clone()));
+                declared.extend(parameters.iter().map(|x| x.identifier.clone()));
                 declared
             }
             MiddleNodeType::Conditional(MirConditional {
@@ -409,6 +411,7 @@ impl MiddleNode {
             | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
+                ..
             })
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,

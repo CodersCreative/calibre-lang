@@ -7,7 +7,7 @@ EnumExpression
 */
 
 use crate::{
-    ast::{LirAggregate, LirAssign, LirEnum, LirNodeType},
+    ast::{LirAggregate, LirAssign, LirClone, LirEnum, LirNodeType},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -19,7 +19,14 @@ use calibre_parser::{Span, ast::ObjectMap};
 
 impl LirLowering for MirAssignment {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        let rhs = env.lower_node(*self.value);
+        let mut rhs = env.lower_node(*self.value);
+
+        if !self.data_type.is_ref() {
+            rhs = LirNodeType::Clone(LirClone {
+                value: Box::new(rhs),
+            });
+        }
+
         let lhs = env
             .lower_lvalue(*self.identifier)
             .expect("Unable to get L-Value");

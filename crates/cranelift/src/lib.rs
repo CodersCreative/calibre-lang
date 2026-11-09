@@ -160,10 +160,10 @@ impl CompilerData {
         for (key, func) in &self.registry.functions {
             let mut signature = module.make_signature();
 
-            for (_, param_ty) in func.params.iter() {
-                signature
-                    .params
-                    .push(AbiParam::new(self.types.to_cranelift_type(param_ty)));
+            for param in func.params.iter() {
+                signature.params.push(AbiParam::new(
+                    self.types.to_cranelift_type(&param.data_type),
+                ));
             }
 
             if !func.return_type.is_null() && func.return_type != MirDataType::Never {
@@ -185,12 +185,10 @@ impl CompilerData {
             self.context.func.signature.params.clear();
             self.context.func.signature.returns.clear();
 
-            for (_, param_ty) in func.params.iter() {
-                self.context
-                    .func
-                    .signature
-                    .params
-                    .push(AbiParam::new(self.types.to_cranelift_type(param_ty)));
+            for param in func.params.iter() {
+                self.context.func.signature.params.push(AbiParam::new(
+                    self.types.to_cranelift_type(&param.data_type),
+                ));
             }
 
             if !func.return_type.is_null() && func.return_type != MirDataType::Never {

@@ -1,12 +1,9 @@
 use calibre_mir::{
-    ast::types::MirDataType,
-    scoping::{FullyQualifiedPath, ScopeId},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType, typing::MirTypable},
+    scoping::ScopeId,
     symbols::resolve::{Key, ResolutionOptions},
-    symbols::{TypeKey, VariableKey},
-    typing::MiddleObject,
+    translate::MirLowering,
 };
-use std::sync::Arc;
-use ustr::Ustr;
 
 use super::*;
 
@@ -50,6 +47,7 @@ impl CalibreLanguageServer {
                 break;
             }
         }
+
         CompletionContext::Global { prefix }
     }
 
@@ -75,62 +73,17 @@ impl CalibreLanguageServer {
         scope: ScopeId,
         base_expr: &str,
     ) -> Option<MirDataType> {
-        let cleaned = Self::clean_base_expr(base_expr);
-        if cleaned.is_empty() {
-            return None;
-        }
+        let mut parser = Parser::default();
+        let node = parser.produce_ast(base_expr);
 
-        let normalized = cleaned.replace("::", ".");
-        let parts = normalized
-            .split('.')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>();
-        if parts.is_empty() {
-            return None;
-        }
+        let span = node.span;
+        let node = node.lower(env, scope, span, None).ok()?;
+        let node = std::mem::replace(
+            node.nodes().last_mut()?,
+            MiddleNode::new(MiddleNodeType::EmptyLine, span),
+        );
 
-        let first = parts[0];
-        let canonical_first = env.resolve(scope, &first, ResolutionOptions::all()).ok()?;
-
-        let mut current = match canonical_first {
-            Key::VariableKey(x) => env.symbols.variables.get(&x).map(|x| x.data_type.clone())?,
-            Key::TypeKey(x) if env.typing.objects.contains_key(&x) => MirDataType::Struct {
-                identifier: x,
-                generic_types: Vec::new(),
-            },
-            _ => return None,
-        };
-
-        for member in parts.iter().skip(1) {
-            let member = member.trim();
-            if member.is_empty() {
-                continue;
-            }
-            if let Some(field_ty) = env.resolve_member_field_type(&current, &Ustr::from(member)) {
-                current = field_ty;
-                continue;
-            }
-
-            if let Some(method_ty) = env.resolve_member_fn_type(&current, &member) {
-                current = method_ty.apply_callable().unwrap_or(method_ty);
-                continue;
-            }
-
-            return None;
-        }
-
-        Some(current)
-    }
-
-    #[inline]
-    pub(super) fn object_from_type<'a>(
-        env: &'a MiddleEnvironment,
-        data_type: &MirDataType,
-    ) -> Option<&'a MiddleObject> {
-        match data_type {
-            MirDataType::Struct { identifier, .. } => env.typing.objects.get(identifier),
-            _ => None,
-        }
+        node.mir_type_of(env, scope, span)
     }
 
     pub(super) fn extract_callee_before_open_paren(text: &str, open_idx: usize) -> Option<String> {
@@ -266,7 +219,6 @@ impl CalibreLanguageServer {
     }
 
     pub(super) fn signature_information_for_data_type(
-        _name: &str,
         data_type: &MirDataType,
     ) -> Option<SignatureInformation> {
         match data_type {
@@ -298,9 +250,11 @@ impl CalibreLanguageServer {
         let after_name = idx + needle.len();
         let bytes = text.as_bytes();
         let mut i = after_name;
+
         while i < bytes.len() && bytes[i].is_ascii_whitespace() {
             i += 1;
         }
+
         if i >= bytes.len() || bytes[i] != b'(' {
             return None;
         }
@@ -308,6 +262,7 @@ impl CalibreLanguageServer {
         let open = i;
         i += 1;
         let mut depth = 1i32;
+
         while i < bytes.len() && depth > 0 {
             match bytes[i] {
                 b'(' => depth += 1,
@@ -316,6 +271,7 @@ impl CalibreLanguageServer {
             }
             i += 1;
         }
+
         if depth != 0 || i <= open + 1 {
             return None;
         }
@@ -360,6 +316,7 @@ impl CalibreLanguageServer {
             let mut parser = Parser::default();
             parser.set_source_path(Some(path.clone()));
             let ast = parser.produce_ast(text);
+
             let (env, scope, middle_ast) =
                 MiddleEnvironment::new_and_evaluate(ast, path, Vec::new(), false, true);
             let current_scope = Self::find_scope_at_with(&middle_ast, scope, position);
@@ -368,8 +325,7 @@ impl CalibreLanguageServer {
                 .resolve(current_scope, &callee, ResolutionOptions::idents())
                 .or_else(|_| env.resolve(scope, &callee, ResolutionOptions::idents()))
                 && let Some(var) = env.symbols.variables.get(&canonical.unwrap_variable())
-                && let Some(sig) =
-                    Self::signature_information_for_data_type(&callee, &var.data_type)
+                && let Some(sig) = Self::signature_information_for_data_type(&var.data_type)
             {
                 signatures.push(sig);
             }
@@ -397,17 +353,8 @@ impl CalibreLanguageServer {
             return false;
         }
 
-        let mut chars = name.chars();
-
-        let Some(first) = chars.next() else {
-            return false;
-        };
-
-        if !(first.is_ascii_alphabetic() || first == '_') {
-            return false;
-        }
-
-        chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+        name.chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
     pub(super) fn keyword_completion_items(prefix: &str) -> Vec<CompletionItem> {
@@ -430,148 +377,121 @@ impl CalibreLanguageServer {
         I: IntoIterator<Item = String>,
     {
         let mut seen: HashSet<String> = HashSet::new();
-        let mut items = Vec::new();
-        for text in texts {
-            let mut current = String::new();
-            for ch in text.chars() {
-                if ch.is_ascii_alphanumeric() || ch == '_' {
-                    current.push(ch);
-                } else if !current.is_empty() {
-                    if (prefix.is_empty() || current.starts_with(prefix))
-                        && seen.insert(current.clone())
-                    {
-                        // TODO Make lexical scans redundant
-                        items.push(CompletionItem {
-                            label: current.clone(),
-                            detail: Some("lexical".to_string()),
-                            kind: Some(CompletionItemKind::TEXT),
-                            documentation: Some(Documentation::String(
-                                "Symbol from lexical scan of open documents.".to_string(),
-                            )),
-                            sort_text: Some(format!("3_{}", current)),
-                            ..CompletionItem::default()
-                        });
-                    }
-                    current.clear();
+
+        let texts: Vec<String> = texts
+            .into_iter()
+            .flat_map(|x| {
+                x.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>()
+            })
+            .collect();
+
+        texts
+            .into_iter()
+            .filter_map(|current| {
+                if !current.is_empty()
+                    && (prefix.is_empty() || current.starts_with(prefix))
+                    && seen.insert(current.clone())
+                {
+                    Some(CompletionItem {
+                        label: current.clone(),
+                        detail: Some("lexical".to_string()),
+                        kind: Some(CompletionItemKind::TEXT),
+                        documentation: Some(Documentation::String(
+                            "Symbol from lexical scan of open documents.".to_string(),
+                        )),
+                        sort_text: Some(format!("3_{}", current)),
+                        ..CompletionItem::default()
+                    })
+                } else {
+                    None
                 }
-            }
-
-            // TODO Make lexical scans redundant
-            if !current.is_empty()
-                && (prefix.is_empty() || current.starts_with(prefix))
-                && seen.insert(current.clone())
-            {
-                let label = current.clone();
-                items.push(CompletionItem {
-                    label,
-                    detail: Some("lexical".to_string()),
-                    kind: Some(CompletionItemKind::TEXT),
-                    documentation: Some(Documentation::String(
-                        "Symbol from lexical scan of open documents.".to_string(),
-                    )),
-                    sort_text: Some(format!("3_{}", current)),
-                    ..CompletionItem::default()
-                });
-            }
-        }
-
-        items
+            })
+            .collect()
     }
 
     pub(super) fn global_semantic_completion_item(
         env: &MiddleEnvironment,
-        visible: &str,
-        canonical: &str,
+        canonical: Key,
     ) -> CompletionItem {
-        let canonical_key = VariableKey {
-            fully_qualified_path: Arc::new(FullyQualifiedPath {
-                name: Some(Ustr::from(canonical)),
-                parent: None,
-            }),
-            shadow_counter: None,
-        };
-        let display_name = Self::sanitize_name(visible);
-        let (detail, kind, documentation) = if let Some(var) =
-            env.symbols.variables.get(&canonical_key)
-        {
-            match &var.data_type {
-                MirDataType::Function {
-                    parameters,
-                    return_type,
-                }
-                | MirDataType::NativeFunction {
-                    return_type,
-                    parameters,
-                } => (
-                    var.data_type.to_string(),
-                    CompletionItemKind::FUNCTION,
-                    format!(
-                        "Resolved function `{}`\n\nCanonical: `{}`\n\nParameters: {}\nReturn: {}",
-                        display_name,
-                        canonical,
-                        parameters
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        return_type
-                    ),
-                ),
-                _ => {
-                    let ty = var.data_type.to_string();
-                    (
-                        ty.clone(),
-                        CompletionItemKind::VARIABLE,
+        let (name, detail, kind, documentation) = match canonical {
+            Key::VariableKey(key) => {
+                let data_type = env.symbols.variables.get(&key).map(|x| &x.data_type);
+                match data_type {
+                    Some(MirDataType::Function {
+                        parameters,
+                        return_type,
+                    })
+                    | Some(MirDataType::NativeFunction {
+                        return_type,
+                        parameters,
+                    }) => (
+                        key.name().to_string(),
+                        data_type.map(|x| x.to_string()).unwrap_or_default(),
+                        CompletionItemKind::FUNCTION,
                         format!(
-                            "Resolved variable `{}`\n\nCanonical: `{}`\n\nType: {ty}",
-                            display_name, canonical
+                            "Function `{}`\n\nCanonical: `{}`\n\nParameters: {}\nReturn: {}",
+                            key.name(),
+                            key,
+                            parameters
+                                .iter()
+                                .map(|x| x.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            return_type
                         ),
-                    )
+                    ),
+                    _ => {
+                        let ty = data_type.map(|x| x.to_string()).unwrap_or_default();
+                        (
+                            key.name().to_string(),
+                            ty.clone(),
+                            CompletionItemKind::VARIABLE,
+                            format!(
+                                "Variable `{}`\n\nCanonical: `{}`\n\nType: {ty}",
+                                key.name(),
+                                key
+                            ),
+                        )
+                    }
                 }
             }
-        } else {
-            let type_key = TypeKey {
-                fully_qualified_path: Arc::new(FullyQualifiedPath {
-                    name: Some(Ustr::from(canonical)),
-                    parent: None,
-                }),
-            };
-            if env.typing.objects.contains_key(&type_key) {
-                let (detail, kind) = if let Some(object) = env.typing.objects.get(&type_key) {
-                    (
-                        object.object_type.to_string(),
-                        match &object.object_type {
-                            MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
-                            MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
-                            MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
-                        },
-                    )
+            Key::TypeKey(key) => {
+                if env.typing.objects.contains_key(&key) {
+                    let (detail, kind) = if let Some(object) = env.typing.objects.get(&key) {
+                        (
+                            object.object_type.to_string(),
+                            match &object.object_type {
+                                MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
+                                MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
+                                MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
+                            },
+                        )
+                    } else {
+                        ("Unknown".to_string(), CompletionItemKind::STRUCT)
+                    };
+
+                    let doc = format!("Type `{}`\n\nCanonical: `{}`\n\n{detail}", key.name(), key);
+
+                    (key.name().to_string(), detail, kind, doc)
                 } else {
-                    ("semantic type".to_string(), CompletionItemKind::STRUCT)
-                };
-                let doc = format!(
-                    "Resolved type `{}`\n\nCanonical: `{}`\n\n{detail}",
-                    display_name, canonical
-                );
-                (detail, kind, doc)
-            } else {
-                (
-                    "semantic symbol".to_string(),
-                    CompletionItemKind::FIELD,
-                    format!(
-                        "Resolved symbol `{}`\n\nCanonical: `{}`",
-                        display_name, canonical
-                    ),
-                )
+                    (
+                        key.name().to_string(),
+                        "Unknown".to_string(),
+                        CompletionItemKind::FIELD,
+                        format!("Type `{}`\n\nCanonical: `{}`", key.name(), key),
+                    )
+                }
             }
         };
 
         CompletionItem {
-            label: display_name.clone(),
+            label: name.clone(),
             detail: Some(detail),
             kind: Some(kind),
             documentation: Some(Documentation::String(documentation)),
-            sort_text: Some(format!("1_{}", display_name)),
+            sort_text: Some(format!("1_{}", name)),
             ..CompletionItem::default()
         }
     }
@@ -585,18 +505,15 @@ impl CalibreLanguageServer {
     ) {
         current_scope.ancestors(&env.scoping.scopes).for_each(|x| {
             if let Ok(scope_ref) = env.scoping.scope_or_err(x) {
-                for (visible, canonical) in &scope_ref.mappings {
-                    let display_name = Self::sanitize_name(visible);
-
-                    if !prefix.is_empty() && !display_name.starts_with(prefix) {
+                for (name, canonical) in &scope_ref.mappings {
+                    if !prefix.is_empty() && !name.starts_with(prefix) {
                         continue;
                     }
 
-                    out.entry(display_name.clone()).or_insert_with(|| {
+                    out.entry(name.to_string()).or_insert_with(|| {
                         Self::global_semantic_completion_item(
                             env,
-                            visible,
-                            canonical.name().as_str(),
+                            Key::VariableKey(canonical.clone()),
                         )
                     });
                 }
@@ -633,8 +550,8 @@ impl CalibreLanguageServer {
         out: &mut HashMap<String, CompletionItem>,
     ) {
         for (type_key, object) in &env.typing.objects {
-            let display_name = Self::sanitize_name(type_key.name().as_str());
-            if !prefix.is_empty() && !display_name.starts_with(prefix) {
+            let name = type_key.name();
+            if !prefix.is_empty() && !name.starts_with(prefix) {
                 continue;
             }
 
@@ -644,19 +561,15 @@ impl CalibreLanguageServer {
                 MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
             };
 
-            out.entry(display_name.clone()).or_insert(CompletionItem {
-                label: display_name.clone(),
+            out.entry(name.to_string()).or_insert(CompletionItem {
+                label: name.to_string(),
                 detail: Some(object.object_type.to_string()),
                 kind: Some(kind),
                 documentation: Some(Documentation::String(format!("Type: {}", type_key))),
-                sort_text: Some(format!("1_{}", display_name)),
+                sort_text: Some(format!("1_{}", name)),
                 ..CompletionItem::default()
             });
         }
-    }
-
-    fn sanitize_name(name: &str) -> String {
-        name.to_string()
     }
 
     pub(super) fn collect_member_semantic_completions(
@@ -670,36 +583,35 @@ impl CalibreLanguageServer {
             return;
         };
 
-        if let Some(obj) = Self::object_from_type(env, &base_ty)
+        if let Some(obj) = env.typing.find_object_from_type(&base_ty)
             && let MiddleTypeDefType::Struct(fields) = &obj.object_type
         {
-            for (field_name, (field_ty, _default)) in &fields.0 {
-                let display_name = Self::sanitize_name(field_name);
-                if !prefix.is_empty() && !display_name.starts_with(prefix) {
+            for (name, (data_type, _)) in &fields.0 {
+                if !prefix.is_empty() && !name.starts_with(prefix) {
                     continue;
                 }
-                out.entry(display_name.clone()).or_insert(CompletionItem {
-                    label: display_name.clone(),
-                    detail: Some(format!("field: {}", field_ty)),
+
+                out.entry(name.to_string()).or_insert(CompletionItem {
+                    label: name.to_string(),
+                    detail: Some(format!("field: {}", data_type)),
                     kind: Some(CompletionItemKind::FIELD),
                     documentation: Some(Documentation::String(format!("Field on `{}`", base_ty))),
-                    sort_text: Some(format!("1_{}", display_name)),
+                    sort_text: Some(format!("1_{}", name)),
                     ..CompletionItem::default()
                 });
             }
         }
 
         if let Some(imp) = env.typing.find_inherent_impl_for_type(&base_ty) {
-            for (member_name, canonical_member) in imp.get_all_members() {
-                let display_name = Self::sanitize_name(member_name);
-                if !prefix.is_empty() && !display_name.starts_with(prefix) {
+            for (name, member) in imp.get_all_members() {
+                if !prefix.is_empty() && !name.starts_with(prefix) {
                     continue;
                 }
 
                 let detail = env
                     .symbols
                     .variables
-                    .get(&canonical_member.symbol_name)
+                    .get(&member.symbol_name)
                     .and_then(|v| {
                         if v.data_type.is_callable() {
                             Some(v.data_type.to_string())
@@ -709,15 +621,15 @@ impl CalibreLanguageServer {
                     })
                     .unwrap_or_else(|| "method".to_string());
 
-                out.entry(display_name.clone()).or_insert(CompletionItem {
-                    label: display_name.clone(),
+                out.entry(name.to_string()).or_insert(CompletionItem {
+                    label: name.to_string(),
                     detail: Some(detail),
                     kind: Some(CompletionItemKind::METHOD),
                     documentation: Some(Documentation::String(format!(
                         "Method from impl/trait on `{}`\n\nCanonical: `{}`",
-                        base_ty, canonical_member.symbol_name
+                        base_ty, member.symbol_name
                     ))),
-                    sort_text: Some(format!("1_{}", display_name)),
+                    sort_text: Some(format!("1_{}", name)),
                     ..CompletionItem::default()
                 });
             }

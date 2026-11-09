@@ -2,10 +2,11 @@ use super::super::VM;
 use crate::{
     VarName,
     error::RuntimeError,
-    value::{RuntimeValue, TerminateValue, hashable::HashKey},
+    value::{DeepClone, RuntimeValue, TerminateValue, hashable::HashKey},
 };
 use calibre_bytecode::{Reg, VMBlock, VMFunction};
 use calibre_lir::{VariableKey, ast::BlockId};
+use calibre_parser::ast::nodes::VarType;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{instrument, trace};
@@ -212,25 +213,48 @@ impl VM {
 
             match args {
                 FunctionArgs::Values(args) => {
-                    for (reg, arg) in function.param_regs.iter().zip(args) {
-                        self.set_reg_value(*reg, arg.clone());
+                    for ((reg, arg), param) in function
+                        .param_regs
+                        .iter()
+                        .zip(args)
+                        .zip(function.params.iter())
+                    {
+                        let arg = if param.var_type == VarType::Mutable && !param.is_ref {
+                            arg.clone().deep_clone(self)
+                        } else {
+                            arg.clone()
+                        };
+
+                        self.set_reg_value(*reg, arg);
                     }
                 }
                 FunctionArgs::Regs(args) => {
-                    for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
+                    for ((reg, arg_reg), param) in function
+                        .param_regs
+                        .iter()
+                        .zip(args.iter().copied())
+                        .zip(function.params.iter())
+                    {
                         let arg = self.get_reg_value_in_frame(caller_frame, arg_reg).clone();
+
+                        let arg = if param.var_type == VarType::Mutable && !param.is_ref {
+                            arg.deep_clone(self)
+                        } else {
+                            arg
+                        };
+
                         self.set_reg_value(*reg, arg);
                     }
                 }
             }
 
-            for (name, reg) in function
+            for (param, reg) in function
                 .params
                 .iter()
                 .zip(function.param_regs.iter().copied())
             {
                 let value = self.get_reg_value(reg).clone();
-                let _ = self.variables.insert(name.clone(), value);
+                let _ = self.variables.insert(param.identifier.clone(), value);
             }
 
             let filtered_captures: Vec<(VariableKey, RuntimeValue)> = captures
@@ -317,7 +341,7 @@ impl VM {
         self.restore_captures(prev_vars);
 
         for name in function.params.iter() {
-            self.variables.remove(name);
+            self.variables.remove(&name.identifier);
         }
 
         Ok(Some(result))

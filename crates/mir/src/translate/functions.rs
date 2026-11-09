@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirDiscriminant, MirExtern, MirFunction,
-        MirScopeDecl, MirVarDecl, types::MirDataType, typing::MirTypable,
+        MirFunctionParam, MirScopeDecl, MirVarDecl, types::MirDataType, typing::MirTypable,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -194,10 +194,10 @@ impl MirLowering for FunctionHeader {
                 let mut params = Vec::with_capacity(self.parameters.len());
 
                 for param in &self.parameters {
-                    let data_type = if let Some(x) = &param.1 {
+                    let data_type = if let Some(x) = &param.data_type {
                         env.resolve_data_type(scope, x, ResolutionOptions::typing())
                             .ok()?
-                    } else if let Some(node) = &param.2 {
+                    } else if let Some(node) = &param.default {
                         node.type_of(env, scope, span)?
                     } else {
                         return None;
@@ -334,16 +334,17 @@ impl MirLowering for AstFunction {
         let needs_caller_context = env.tagging.tag_info.contains(&TagInfo::CallerContext);
 
         for (i, param) in self.header.parameters.into_iter().enumerate() {
-            param_idents.push(param.0.clone());
+            param_idents.push(param.identifier.clone());
+
             let og_name = env
                 .resolve(
                     new_scope,
-                    &param.0,
+                    &param.identifier,
                     ResolutionOptions::default().with_dollar(),
                 )?
                 .unwrap_dollar();
 
-            let data_type = if let Some(x) = param.1
+            let data_type = if let Some(x) = param.data_type
                 && !x.is_auto()
             {
                 env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
@@ -351,7 +352,7 @@ impl MirLowering for AstFunction {
                 && let Some(x) = parameters.get(i).cloned()
             {
                 x
-            } else if let Some(node) = &param.2 {
+            } else if let Some(node) = &param.default {
                 node.type_of(env, new_scope, span).ok_or_else(|| {
                     env.context
                         .err_at_current(MiddleErr::CannotInferParameterType(
@@ -372,17 +373,18 @@ impl MirLowering for AstFunction {
                 new_scope,
                 og_name,
                 data_type.clone(),
-                VarType::Mutable,
+                param.var_type,
                 true,
             )?;
 
-            params.push((
-                param_key,
-                data_type.clone(),
-                param
-                    .2
+            params.push(MirFunctionParam {
+                var_type: param.var_type,
+                identifier: param_key,
+                data_type: data_type.clone(),
+                default: param
+                    .default
                     .map(|x| Box::new(x.lower_or_empty(env, new_scope, span, Some(data_type)))),
-            ));
+            });
         }
 
         if needs_caller_context {
@@ -396,7 +398,12 @@ impl MirLowering for AstFunction {
                 true,
             )?;
 
-            params.push((caller_key, caller_context_type, None));
+            params.push(MirFunctionParam {
+                var_type: VarType::Mutable,
+                identifier: caller_key,
+                data_type: caller_context_type,
+                default: None,
+            });
         }
 
         let return_type = if self.header.return_type.is_null()
@@ -883,7 +890,12 @@ impl MiddleEnvironment {
     }
 }
 
-fn method_receiver(env: &MiddleEnvironment, base: AstNode, symbol_name: &VariableKey) -> AstNode {
+fn method_receiver(
+    env: &MiddleEnvironment,
+    base: AstNode,
+    base_type: &MirDataType,
+    symbol_name: &VariableKey,
+) -> AstNode {
     let mutability = env
         .symbols
         .variables
@@ -897,7 +909,9 @@ fn method_receiver(env: &MiddleEnvironment, base: AstNode, symbol_name: &Variabl
             _ => None,
         });
 
-    if let Some(mutability) = mutability {
+    if let Some(mutability) = mutability
+        && !base_type.is_ref()
+    {
         AstNode::new(
             base.span,
             AstNodeType::RefStatement(AstRef {
@@ -1026,7 +1040,7 @@ impl AstCallLowering for AstCall {
 
                     if is_instance_call {
                         node.args
-                            .insert(0, CallArg::Value(method_receiver(env, *base, &key)));
+                            .insert(0, CallArg::Value(method_receiver(env, *base, &ty, &key)));
                     }
 
                     return Ok(Some(node));
@@ -1041,8 +1055,10 @@ impl AstCallLowering for AstCall {
                             .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
                     ));
 
-                    node.args
-                        .insert(0, CallArg::Value(method_receiver(env, *base, &symbol_name)));
+                    node.args.insert(
+                        0,
+                        CallArg::Value(method_receiver(env, *base, &ty, &symbol_name)),
+                    );
 
                     return Ok(Some(node));
                 }
@@ -1062,8 +1078,10 @@ impl AstCallLowering for AstCall {
                         .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
                 ));
 
-                node.args
-                    .insert(0, CallArg::Value(method_receiver(env, *base, &symbol_name)));
+                node.args.insert(
+                    0,
+                    CallArg::Value(method_receiver(env, *base, &ty, &symbol_name)),
+                );
 
                 return Ok(Some(node));
             }
@@ -1191,7 +1209,7 @@ fn prepare_call(
                 .parameters
                 .iter()
                 .map(|parameter| {
-                    if let Some(data_type) = &parameter.1 {
+                    if let Some(data_type) = &parameter.data_type {
                         if let ParserInnerType::Struct(name) = &data_type.data_type
                             && generic_params
                                 .iter()
@@ -1209,7 +1227,7 @@ fn prepare_call(
                         }
 
                         env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                    } else if let Some(node) = &parameter.2 {
+                    } else if let Some(node) = &parameter.default {
                         node.type_of(env, scope, span)
                             .ok_or(MiddleErr::InferImpossible)
                     } else {

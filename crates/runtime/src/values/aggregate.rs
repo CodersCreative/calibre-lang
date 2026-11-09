@@ -4,6 +4,7 @@ use crate::{
 };
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct GcAggregate {
     pub field_count: usize,
     pub data: Vec<Value>,
@@ -26,6 +27,19 @@ impl GcAggregate {
             }
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_aggregate_deep_clone(agg: *mut GcAggregate) -> *mut GcAggregate {
+    if agg.is_null() {
+        return agg;
+    }
+
+    let mut data = unsafe { &*agg }.clone();
+
+    data.data = data.data.into_iter().map(|x| x.deep_clone()).collect();
+
+    data.alloc()
 }
 
 #[unsafe(no_mangle)]

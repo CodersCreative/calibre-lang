@@ -6,11 +6,16 @@ use crate::{
     },
 };
 use calibre_parser::ast::ObjectMap;
+use dumpster::sync::Gc;
 use std::sync::Arc;
 
 impl DeepClone for ValueSlot {
     fn deep_clone(self, vm: &mut VM) -> Self {
-        ValueSlot::from(self.get().clone().deep_clone(vm))
+        if Gc::ref_count(&self.0).get() > 1 {
+            ValueSlot::from(self.get().clone().deep_clone(vm))
+        } else {
+            self
+        }
     }
 }
 

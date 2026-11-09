@@ -180,10 +180,33 @@ impl MiddleEnvironment {
                 }
 
                 debug!("evaluating build scope");
+                let error_count_before = self.context.errors.len();
                 let span = program.span;
-                let node = program.lower_or_empty(self, scope, span, None);
-                self.scoping.scope_mut_or_err(scope)?.built = true;
-                Some(node)
+                let middle = program.lower_or_empty(self, scope, span, None);
+
+                if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
+                    x.built = true
+                };
+
+                if self.context.errors.len() > error_count_before {
+                    let new_errors: Vec<_> =
+                        self.context.errors.drain(error_count_before..).collect();
+
+                    for err in new_errors {
+                        let (extracted_span, err) = err.unwrap();
+                        self.context.errors.push(MiddleErr::AtWithFile {
+                            path: path.clone(),
+                            span: if extracted_span.is_none() {
+                                span
+                            } else {
+                                extracted_span
+                            },
+                            error: Box::new(err),
+                        });
+                    }
+                }
+
+                Some(middle)
             }
         } else {
             None
@@ -226,11 +249,32 @@ impl MiddleEnvironment {
         }
 
         debug!("evaluating imported scope");
+        let error_count_before = self.context.errors.len();
         let span = program.span;
-        let node = program.lower_or_empty(self, scope, span, None);
-        self.scoping.scope_mut_or_err(scope)?.built = true;
+        let middle = program.lower_or_empty(self, scope, span, None);
 
-        let node = match (node.node_type.clone(), build_node) {
+        if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
+            x.built = true
+        };
+
+        if self.context.errors.len() > error_count_before {
+            let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
+
+            for err in new_errors {
+                let (extracted_span, err) = err.unwrap();
+                self.context.errors.push(MiddleErr::AtWithFile {
+                    path: path.clone(),
+                    span: if extracted_span.is_none() {
+                        span
+                    } else {
+                        extracted_span
+                    },
+                    error: Box::new(err),
+                });
+            }
+        }
+
+        let node = match (middle.node_type.clone(), build_node) {
             (MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }), Some(build_node)) => {
                 MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
@@ -244,12 +288,12 @@ impl MiddleEnvironment {
                         function_body: false,
                         scope_id: scope,
                     }),
-                    ..node
+                    ..middle
                 }
             }
             (_, Some(build_node)) => MiddleNode::new(
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                    body: Box::new([node, build_node]),
+                    body: Box::new([middle, build_node]),
                     create_new_scope: false,
                     is_temp: false,
                     function_body: false,
@@ -257,7 +301,7 @@ impl MiddleEnvironment {
                 }),
                 self.context.current_span(),
             ),
-            _ => node,
+            _ => middle,
         };
 
         Ok((scope, Some(node)))

@@ -125,37 +125,46 @@ impl MirRenamable for MiddleNodeType {
                 for param in parameters {
                     let new_name = Ustr::from(&format!(
                         "{}->{}",
-                        param.0.name(),
+                        param.identifier.name(),
                         fastrand::u32(0..u32::MAX)
                     ));
+
                     state.variables.insert(
-                        param.0.clone(),
+                        param.identifier.clone(),
                         VariableKey {
                             fully_qualified_path: FullyQualifiedPath::combine(
-                                param.0.fully_qualified_path.parent.clone(),
+                                param.identifier.fully_qualified_path.parent.clone(),
                                 new_name,
                             ),
                             shadow_counter: None,
                         },
                     );
 
-                    if let Some(x) = memo_params.iter_mut().find(|x| *x == param.0.name()) {
+                    if let Some(x) = memo_params
+                        .iter_mut()
+                        .find(|x| *x == param.identifier.name())
+                    {
                         *x = new_name;
                     }
 
-                    let mut new_path = (*param.0.fully_qualified_path).clone();
+                    let mut new_path = (*param.identifier.fully_qualified_path).clone();
                     new_path.name = Some(new_name);
-                    param.0.fully_qualified_path = Arc::new(new_path);
+                    param.identifier.fully_qualified_path = Arc::new(new_path);
 
-                    if let Some(default_value) = &mut param.2 {
+                    if let Some(default_value) = &mut param.default {
                         default_value.rename(state);
                     }
                 }
                 body.rename(state);
             }
-            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
+            MiddleNodeType::AssignmentExpression(MirAssignment {
+                identifier,
+                value,
+                data_type,
+            }) => {
                 identifier.rename(state);
                 value.rename(state);
+                data_type.rename(state);
             }
             MiddleNodeType::NegExpression(MirNeg { value }) => value.rename(state),
             MiddleNodeType::AsExpression(MirAs {

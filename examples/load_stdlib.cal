@@ -1,0 +1,23 @@
+import * from std::async;
+import * from std::collections;
+import * from std::console;
+import * from std::crypto;
+import * from std::env;
+import * from std::fs;
+import * from std::generators;
+import * from std::libc;
+import * from std::list;
+import * from std::math;
+import * from std::net;
+import * from std::option;
+import * from std::process;
+import * from std::random;
+import * from std::range;
+import * from std::regex;
+import * from std::result;
+import * from std::str;
+import * from std::time;
+import * from std::traits;
+
+const main := fn =>
+    print("If you're seeing this, the stdlib passed precompilation successfully")

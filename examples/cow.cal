@@ -1,0 +1,27 @@
+const insert_to_lst := fn(mut lst : list:<int>, index value : int) -> list:<int> => {
+    lst[index] := value;
+    return lst;
+}
+
+const insert_to_lst_mut := fn(lst : &mut list:<int>, index value : int) =>
+    lst[index] := value;
+
+const main := fn => {
+    let lst := [10, 90, 30, 450];
+    let mut lst2 := lst;
+    let mut lst3 := lst;
+    
+    print("lst : ", lst as! str, "\nlst2 : ", lst2 as! str, "\nlst3 : ", lst3, "\n");
+
+    lst3 <<= 900;
+    print("lst : ", lst as! str, "\nlst2 : ", lst2 as! str, "\nlst3 : ", lst3, "\n");
+    
+    lst2[2]! := 400;
+    print("lst : ", lst as! str, "\nlst2 : ", lst2 as! str, "\nlst3 : ", lst3, "\n");
+
+    insert_to_lst_mut(lst2.&mut, 1, 20);
+    print("lst : ", lst as! str, "\nlst2 : ", lst2 as! str, "\nlst3 : ", lst3, "\n");
+
+    lst3 := insert_to_lst(lst3, 3, 90);
+    print("lst : ", lst as! str, "\nlst2 : ", lst2 as! str, "\nlst3 : ", lst3, "\n");
+}

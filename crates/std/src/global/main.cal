@@ -17,7 +17,7 @@ const print := fn (msg : list:<str>) => {
 };
 
 @pure
-const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> gen:<int> => {
+const range := fn (mut start mut end : int, step : int = 1, inclusive : bool = false) -> gen:<int> => {
 	if (start != INT_MIN) && (end = INT_MIN) => {
 		end := start;
 		start := 0;

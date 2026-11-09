@@ -1,20 +1,35 @@
 use crate::ast::{
     Substitutable,
     idents::{ParserText, PotentialDollarIdentifier},
-    nodes::{AstNode, DestructurePattern},
+    nodes::{AstNode, DestructurePattern, VarType},
     types::{GenericTypes, ParserDataType},
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FunctionParam {
+    pub var_type: VarType,
+    pub identifier: PotentialDollarIdentifier,
+    pub data_type: Option<ParserDataType>,
+    pub default: Option<Box<AstNode>>,
+}
+
+impl FunctionParam {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        Self {
+            var_type: self.var_type,
+            identifier: self.identifier,
+            data_type: self.data_type.map(|x| x.substitute(subst)),
+            default: self.default.map(|x| Box::new(x.substitute(subst))),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct FunctionHeader {
     pub generics: GenericTypes,
-    pub parameters: Vec<(
-        PotentialDollarIdentifier,
-        Option<ParserDataType>,
-        Option<Box<AstNode>>,
-    )>,
+    pub parameters: Vec<FunctionParam>,
     pub return_type: ParserDataType,
     pub param_destructures: Vec<(usize, DestructurePattern)>,
 }
@@ -24,13 +39,7 @@ impl FunctionHeader {
         self.parameters = self
             .parameters
             .into_iter()
-            .map(|x| {
-                (
-                    x.0,
-                    x.1.map(|x| x.substitute(subst)),
-                    x.2.map(|x| Box::new(x.substitute(subst))),
-                )
-            })
+            .map(|x| x.substitute(subst))
             .collect();
 
         self.return_type = self.return_type.substitute(subst);

@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct GcList {
     pub data: Vec<Value>,
 }
@@ -26,6 +26,19 @@ impl GcList {
             }
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_list_deep_clone(lst: *mut GcList) -> *mut GcList {
+    if lst.is_null() {
+        return lst;
+    }
+
+    let mut data = unsafe { &*lst }.clone();
+
+    data.data = data.data.into_iter().map(|x| x.deep_clone()).collect();
+
+    data.alloc()
 }
 
 #[unsafe(no_mangle)]

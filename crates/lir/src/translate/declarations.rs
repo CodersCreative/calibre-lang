@@ -7,7 +7,7 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType},
+    ast::{LirClone, LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType},
     environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
@@ -27,11 +27,17 @@ impl LirLowering for MirVarDecl {
             env.last_ident = None;
         }
 
-        let val = env.lower_node(*self.value);
+        let mut val = env.lower_node(*self.value);
 
         // This works but theres definitely potential to reduce the number of referenced variables substantially
         let is_referenced = self.var_type == VarType::Mutable
             || env.referenced_identifiers.contains(&self.identifier);
+
+        if self.var_type == VarType::Mutable && !self.data_type.is_ref() {
+            val = LirNodeType::Clone(LirClone {
+                value: Box::new(val),
+            });
+        }
 
         env.add_instr(LirNode::new(
             span,
@@ -122,11 +128,12 @@ impl LirLowering for MirFunction {
             .parameters
             .iter()
             .enumerate()
-            .map(|(i, (name, _, _))| {
-                if referenced_names.contains(name) {
+            .map(|(i, param)| {
+                if referenced_names.contains(&param.identifier) {
                     referenced_params |= 1 << i;
                 }
-                name.clone()
+
+                param.identifier.clone()
             })
             .collect();
 
@@ -183,7 +190,7 @@ impl LirLowering for MirFunction {
 
         let mut memo_params = 0;
         for (i, param) in self.parameters.iter().enumerate() {
-            if self.memo_params.contains(param.0.name()) {
+            if self.memo_params.contains(param.identifier.name()) {
                 memo_params |= 1 << i;
             }
         }
@@ -195,7 +202,7 @@ impl LirLowering for MirFunction {
                 params: self
                     .parameters
                     .into_iter()
-                    .map(|x| (x.0, x.1))
+                    .map(|x| x.into())
                     .collect::<Vec<_>>()
                     .into_boxed_slice(),
                 captures: captures_for_func.into_boxed_slice(),
