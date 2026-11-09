@@ -1,9 +1,9 @@
 use super::*;
 use calibre_mir::{
     ast::{
-        MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-        MirComparison, MirConditional, MirDeref, MirEmit, MirEnum, MirField, MirFunction, MirIndex,
-        MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
+        MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
+        MirCall, MirComparison, MirConditional, MirDeref, MirEmit, MirEnum, MirField, MirFunction,
+        MirIndex, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
     },
     scoping::ScopeId,
     symbols::resolve::{Key, ResolutionOptions},
@@ -12,12 +12,12 @@ use ustr::Ustr;
 
 impl CalibreLanguageServer {
     pub(super) fn find_scope_at_with(
-        ast: &calibre_mir::ast::MiddleNode,
+        ast: &MiddleNode,
         default_scope: ScopeId,
         pos: Position,
     ) -> ScopeId {
         fn traverse(
-            node: &calibre_mir::ast::MiddleNode,
+            node: &MiddleNode,
             pos: Position,
             text: &str,
             current_scope: &mut ScopeId,
@@ -90,6 +90,7 @@ impl CalibreLanguageServer {
                 MiddleNodeType::AssignmentExpression(MirAssignment {
                     identifier: left,
                     value: right,
+                    ..
                 })
                 | MiddleNodeType::RangeDeclaration(MirRange {
                     from: left,

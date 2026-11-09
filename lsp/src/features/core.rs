@@ -1,3 +1,5 @@
+use async_lsp::lsp_types::{FormattingOptions, TextDocumentContentChangeEvent};
+
 use super::*;
 
 impl CalibreLanguageServer {
@@ -24,6 +26,7 @@ impl CalibreLanguageServer {
         if let Some(doc) = self.documents.get(uri) {
             return Some(doc.text.clone());
         }
+
         Self::path_from_url(uri).and_then(|path| std::fs::read_to_string(path).ok())
     }
 
@@ -38,6 +41,7 @@ impl CalibreLanguageServer {
     #[inline]
     pub fn insert_document_state(&mut self, uri: Url, version: i32, text: String) {
         let latest_diagnostics_job = self.latest_diagnostics_job_for(&uri);
+
         self.documents.insert(
             uri,
             DocumentState {
@@ -48,9 +52,7 @@ impl CalibreLanguageServer {
         );
     }
 
-    pub(super) fn formatter_from_options(
-        options: &async_lsp::lsp_types::FormattingOptions,
-    ) -> Formatter {
+    pub(super) fn formatter_from_options(options: &FormattingOptions) -> Formatter {
         if options.insert_spaces {
             Formatter {
                 tab: Tab::new(' ', options.tab_size as usize),
@@ -69,6 +71,7 @@ impl CalibreLanguageServer {
             if idx >= offset {
                 break;
             }
+
             if ch == '\n' {
                 line += 1;
                 character = 0;
@@ -91,14 +94,14 @@ impl CalibreLanguageServer {
         if pos.line < range.start.line || pos.line > range.end.line {
             return false;
         }
-        if pos.line == range.start.line && pos.character < range.start.character {
+
+        if pos.character < range.start.character || pos.character > range.end.character {
             return false;
         }
-        if pos.line == range.end.line && pos.character > range.end.character {
-            return false;
-        }
+
         true
     }
+
     pub(super) fn clamp_to_line_len(line: &str, character: u32) -> usize {
         let char_count = line.chars().count();
         usize::min(character as usize, char_count)
@@ -106,9 +109,11 @@ impl CalibreLanguageServer {
 
     pub(super) fn char_to_byte_idx(line: &str, character: u32) -> usize {
         let target = Self::clamp_to_line_len(line, character);
+
         if target == 0 {
             return 0;
         }
+
         line.char_indices()
             .nth(target)
             .map(|(idx, _)| idx)
@@ -123,7 +128,9 @@ impl CalibreLanguageServer {
             let Some(line) = lines.next() else {
                 return text.len();
             };
+
             offset = offset.saturating_add(line.len());
+
             if current_line < position.line {
                 offset = offset.saturating_add(1);
             }
@@ -138,7 +145,7 @@ impl CalibreLanguageServer {
 
     pub(super) fn apply_incremental_change(
         original_text: &str,
-        change: &async_lsp::lsp_types::TextDocumentContentChangeEvent,
+        change: &TextDocumentContentChangeEvent,
     ) -> String {
         let Some(range) = change.range else {
             return change.text.clone();
@@ -146,6 +153,7 @@ impl CalibreLanguageServer {
 
         let start = Self::position_to_byte_offset(original_text, range.start);
         let end = Self::position_to_byte_offset(original_text, range.end);
+
         if start > end || end > original_text.len() {
             return original_text.to_string();
         }
@@ -156,6 +164,7 @@ impl CalibreLanguageServer {
                 .saturating_sub(end.saturating_sub(start))
                 .saturating_add(change.text.len()),
         );
+
         updated.push_str(&original_text[..start]);
         updated.push_str(&change.text);
         updated.push_str(&original_text[end..]);
@@ -166,7 +175,7 @@ impl CalibreLanguageServer {
         &mut self,
         uri: Url,
         version: i32,
-        content_changes: &[async_lsp::lsp_types::TextDocumentContentChangeEvent],
+        content_changes: &[TextDocumentContentChangeEvent],
     ) {
         let current_text = self
             .documents
@@ -177,6 +186,7 @@ impl CalibreLanguageServer {
         let text = content_changes.iter().fold(current_text, |acc, change| {
             Self::apply_incremental_change(&acc, change)
         });
+
         self.insert_document_state(uri, version, text);
 
         if self.documents.len() > MAX_OPEN_DOCUMENTS {
@@ -200,8 +210,10 @@ impl CalibreLanguageServer {
 
     pub(crate) fn new_router(client: ClientSocket) -> Router<Self> {
         let mut router = Router::from_language_server(Self::new(client));
+
         router.event(Self::on_diagnostics_debounce_elapsed);
         router.event(Self::on_diagnostics_ready);
+
         router
     }
 }

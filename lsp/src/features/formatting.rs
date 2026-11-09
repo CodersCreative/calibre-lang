@@ -21,6 +21,7 @@ impl CalibreLanguageServer {
     ) -> Option<String> {
         let start = Self::position_to_byte_offset(contents, range.start);
         let end = Self::position_to_byte_offset(contents, range.end);
+
         if start > end || end > contents.len() {
             return None;
         }
@@ -31,9 +32,11 @@ impl CalibreLanguageServer {
                 .saturating_sub(end.saturating_sub(start))
                 .saturating_add(replacement.len()),
         );
+
         out.push_str(&contents[..start]);
         out.push_str(replacement);
         out.push_str(&contents[end..]);
+
         Some(out)
     }
 }

@@ -260,7 +260,7 @@ impl MiddleEnvironment {
             }
             MirDataType::Struct { identifier, .. } => self
                 .typing
-                .find_object_for_struct_name(identifier)
+                .find_object_from_type_key(identifier)
                 .and_then(|obj| match &obj.object_type {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())

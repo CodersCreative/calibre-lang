@@ -67,7 +67,7 @@ impl MirLowering for AstField {
             if let MirDataType::Struct { identifier, .. } = ty
                 && let Some(MiddleTypeDefType::Enum { .. }) = env
                     .typing
-                    .find_object_for_struct_name(&identifier)
+                    .find_object_from_type_key(&identifier)
                     .map(|x| &x.object_type)
             {
                 return AstNode::new(

@@ -64,6 +64,7 @@ impl CalibreLanguageServer {
             let path = Self::path_from_url(uri).unwrap_or_default();
             let (mut env, _, _) =
                 MiddleEnvironment::new_and_evaluate(ast, path, Vec::new(), false, true);
+
             let semantic_errors = env.context.take_errors();
             if !semantic_errors.is_empty() {
                 diagnostics.extend(Self::semantic_diagnostics(
@@ -156,6 +157,7 @@ impl CalibreLanguageServer {
 
         self.start_diagnostics_job(event.uri, event.version, event.job_id, doc.text.clone())
     }
+
     pub(super) fn on_diagnostics_ready(
         &mut self,
         event: DiagnosticsReadyEvent,
