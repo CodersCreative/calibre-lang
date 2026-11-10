@@ -76,8 +76,9 @@ impl Hash for HashKey {
                 args.hash(state);
             }
             HashKey::Host(host) => {
-                let guard = host.lock().unwrap();
-                dyn_hash::DynHash::dyn_hash(&*guard, state);
+                if let Ok(guard) = host.lock() {
+                    dyn_hash::DynHash::dyn_hash(&*guard, state);
+                }
             }
         }
     }

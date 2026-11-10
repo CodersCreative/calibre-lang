@@ -85,7 +85,7 @@ impl TryFrom<HashKey> for usize {
     fn try_from(value: HashKey) -> Result<Self, Self::Error> {
         match value {
             HashKey::UInt(n) => Ok(n),
-            HashKey::Int(n) if n >= 0 => Ok(n as usize),
+            HashKey::Int(n) if n >= 0 => Ok(n.cast_unsigned()),
             _ => Err(RuntimeError::ExpectedIntFound {
                 found: Box::new(RuntimeValue::Null),
             }),
@@ -400,7 +400,7 @@ impl TryFrom<RuntimeValue> for u8 {
         match value {
             RuntimeValue::Byte(n) => Ok(n),
             RuntimeValue::UInt(n) if n <= u8::MAX as usize => Ok(n as u8),
-            RuntimeValue::Int(n) if n >= 0 && n <= u8::MAX as isize => Ok(n as u8),
+            RuntimeValue::Int(n) if n >= 0 && n <= u8::MAX as isize => Ok(n.cast_unsigned() as u8),
             _ => Err(RuntimeError::ExpectedIntFound {
                 found: Box::new(value),
             }),
@@ -415,7 +415,9 @@ impl TryFrom<RuntimeValue> for u16 {
         match value {
             RuntimeValue::Byte(n) => Ok(n as u16),
             RuntimeValue::UInt(n) if n <= u16::MAX as usize => Ok(n as u16),
-            RuntimeValue::Int(n) if n >= 0 && n <= u16::MAX as isize => Ok(n as u16),
+            RuntimeValue::Int(n) if n >= 0 && n <= u16::MAX as isize => {
+                Ok(n.cast_unsigned() as u16)
+            }
             _ => Err(RuntimeError::ExpectedIntFound {
                 found: Box::new(value),
             }),
@@ -430,7 +432,9 @@ impl TryFrom<RuntimeValue> for u32 {
         match value {
             RuntimeValue::Byte(n) => Ok(n as u32),
             RuntimeValue::UInt(n) if n <= u32::MAX as usize => Ok(n as u32),
-            RuntimeValue::Int(n) if n >= 0 && n <= u32::MAX as isize => Ok(n as u32),
+            RuntimeValue::Int(n) if n >= 0 && n <= u32::MAX as isize => {
+                Ok(n.cast_unsigned() as u32)
+            }
             _ => Err(RuntimeError::ExpectedIntFound {
                 found: Box::new(value),
             }),
@@ -445,7 +449,7 @@ impl TryFrom<RuntimeValue> for usize {
         match value {
             RuntimeValue::UInt(n) => Ok(n),
             RuntimeValue::Byte(n) => Ok(n as usize),
-            RuntimeValue::Int(n) if n >= 0 => Ok(n as usize),
+            RuntimeValue::Int(n) if n >= 0 => Ok(n.cast_unsigned()),
             RuntimeValue::Float(f) => Ok(f as usize),
             _ => Err(RuntimeError::ExpectedIntFound {
                 found: Box::new(value),
@@ -461,7 +465,7 @@ impl TryFrom<RuntimeValue> for u128 {
         match value {
             RuntimeValue::UInt(n) => Ok(n as u128),
             RuntimeValue::Byte(n) => Ok(n as u128),
-            RuntimeValue::Int(n) if n >= 0 => Ok(n as u128),
+            RuntimeValue::Int(n) if n >= 0 => Ok(n.cast_unsigned() as u128),
             RuntimeValue::Float(f) => Ok(f as u128),
             _ => Err(RuntimeError::ExpectedIntFound {
                 found: Box::new(value),

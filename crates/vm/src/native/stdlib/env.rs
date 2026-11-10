@@ -22,7 +22,7 @@ impl NativeFunction for EnvGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let idx = resolve_int(env, pop_or_null(&mut args))? as usize;
+        let idx = resolve_int(env, pop_or_null(&mut args))?.cast_unsigned();
 
         let Some(value) = env.program_args().get(idx) else {
             return Ok(RuntimeValue::Option(None));

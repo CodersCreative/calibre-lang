@@ -355,7 +355,10 @@ impl MiddleEnvironment {
 
         let header = header.substitute(&subst);
 
-        let data_type = header.type_of(self, original_scope, span).unwrap();
+        let data_type = header.type_of(self, original_scope, span).ok_or_else(|| {
+            self.context
+                .err_at_current(MiddleErr::CannotInferFromExpression(body.to_string()))
+        })?;
 
         let key =
             self.register_variable(original_scope, name, data_type.clone(), VarType::Constant)?;

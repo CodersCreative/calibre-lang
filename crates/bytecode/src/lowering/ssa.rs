@@ -141,8 +141,8 @@ impl SSABuilder {
                             continue;
                         }
 
-                        let reg = if all_same {
-                            first_reg.unwrap()
+                        let reg = if all_same && let Some(reg) = first_reg {
+                            reg
                         } else {
                             *current_info
                                 .phi_for

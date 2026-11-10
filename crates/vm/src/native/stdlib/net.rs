@@ -31,8 +31,13 @@ pub struct HostTcpStream(pub TcpStream);
 
 impl Hash for HostTcpStream {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.local_addr().unwrap().hash(state);
-        self.0.peer_addr().unwrap().hash(state);
+        if let Ok(x) = self.0.local_addr() {
+            x.hash(state)
+        }
+
+        if let Ok(x) = self.0.peer_addr() {
+            x.hash(state)
+        }
     }
 }
 
@@ -47,7 +52,9 @@ pub struct HostTcpListener(pub TcpListener);
 
 impl Hash for HostTcpListener {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.local_addr().unwrap().hash(state);
+        if let Ok(x) = self.0.local_addr() {
+            x.hash(state)
+        }
     }
 }
 
@@ -172,9 +179,8 @@ impl NativeFunction for TcpConnect {
             let key = key_for(host.as_str(), port);
             port_redirects()
                 .lock()
-                .unwrap()
-                .get(&key)
-                .copied()
+                .ok()
+                .and_then(|x| x.get(&key).copied())
                 .unwrap_or(port)
         };
 
@@ -284,10 +290,10 @@ impl NativeFunction for TcpAccept {
 
         let (stream, _) = listener
             .lock()
-            .unwrap()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?
             .as_any_mut()
             .downcast_mut::<HostTcpListener>()
-            .unwrap()
+            .ok_or_else(|| RuntimeError::Io(String::from("Downcasted to wrong type")))?
             .0
             .accept()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
@@ -314,12 +320,14 @@ impl NativeFunction for TcpRead {
         let len = resolve_int(env, pop_or_null(&mut args))?;
         let stream = resolve_host(env, pop_or_null(&mut args))?;
 
-        let mut buf = vec![0u8; len.max(0) as usize];
-        let mut guard = stream.lock().unwrap();
-        match guard
+        let mut buf = vec![0u8; len.max(0).cast_unsigned()];
+
+        match stream
+            .lock()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?
             .as_any_mut()
             .downcast_mut::<HostTcpStream>()
-            .unwrap()
+            .ok_or_else(|| RuntimeError::Io(String::from("Downcasted to wrong type")))?
             .0
             .read(&mut buf)
         {
@@ -353,11 +361,12 @@ impl NativeFunction for TcpWrite {
         let data = resolve_str(env, pop_or_null(&mut args))?;
         let stream = resolve_host(env, pop_or_null(&mut args))?;
 
-        let mut guard = stream.lock().unwrap();
-        let n = guard
+        let n = stream
+            .lock()
+            .map_err(|e| RuntimeError::Io(e.to_string()))?
             .as_any_mut()
             .downcast_mut::<HostTcpStream>()
-            .unwrap()
+            .ok_or_else(|| RuntimeError::Io(String::from("Downcasted to wrong type")))?
             .0
             .write(data.as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;

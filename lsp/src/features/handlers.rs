@@ -1,5 +1,5 @@
 use super::*;
-use async_lsp::lsp_types::HoverParams;
+use async_lsp::lsp_types::{HoverParams, InitializedParams};
 
 impl LanguageServer for CalibreLanguageServer {
     type Error = ResponseError;
@@ -51,10 +51,7 @@ impl LanguageServer for CalibreLanguageServer {
         Box::pin(ready(Ok(())))
     }
 
-    fn initialized(
-        &mut self,
-        _: async_lsp::lsp_types::InitializedParams,
-    ) -> ControlFlow<async_lsp::Result<()>> {
+    fn initialized(&mut self, _: InitializedParams) -> ControlFlow<async_lsp::Result<()>> {
         let _ = self.client.notify::<notification::ShowMessage>(
             async_lsp::lsp_types::ShowMessageParams {
                 typ: MessageType::INFO,

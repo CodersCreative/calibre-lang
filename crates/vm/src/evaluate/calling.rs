@@ -95,15 +95,21 @@ impl VM {
                             .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default()))),
                     );
 
-                    if let Some(value) = cache.lock().unwrap().get(&key) {
+                    if let Ok(cache) = cache.lock()
+                        && let Some(value) = cache.get(&key)
+                    {
                         if let Some(profiler) = self.profiler.as_ref() {
                             profiler.record_memoization_hit(self.get_current_task_id(), name);
                         }
+
                         return Ok(value.clone());
                     }
 
                     let result = self.run_function(func.as_ref(), args, refreshed, get_result)?;
-                    cache.lock().unwrap().insert(key, result.clone());
+
+                    if let Ok(mut cache) = cache.lock() {
+                        cache.insert(key, result.clone());
+                    }
 
                     return Ok(result);
                 }

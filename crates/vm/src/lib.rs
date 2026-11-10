@@ -111,7 +111,7 @@ impl Clone for VM {
             suppress_output: self.suppress_output,
             captured_output: self.captured_output.clone(),
             input_buffer: self.input_buffer.clone(),
-            big_consts: Consts::new().unwrap(),
+            big_consts: Consts::new().expect("Big Consts failed to initiate"),
             in_global: self.in_global,
             profiler: self.profiler.clone(),
             current_task_id: self.current_task_id,
@@ -192,7 +192,7 @@ impl VM {
             in_global: false,
             captured_output: Vec::new(),
             input_buffer: Vec::new(),
-            big_consts: Consts::new().unwrap(),
+            big_consts: Consts::new().expect("Big Consts failed to initiate"),
             profiler,
             current_task_id,
         };

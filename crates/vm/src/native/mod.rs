@@ -20,7 +20,7 @@ pub trait NativeFunction: Send + Sync {
             .natives
             .get(&Ustr::from(&name))
             .cloned()
-            .unwrap()
+            .expect("Failed to find native variable")
             .unwrap_variable()
     }
 }

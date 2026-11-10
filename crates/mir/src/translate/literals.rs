@@ -533,7 +533,7 @@ impl MirLowering for AstRange {
                     span,
                     MiddleErr::InvalidType {
                         expected: Box::new(MirDataType::Int),
-                        found: Box::new(from_type.or(to_type).unwrap()),
+                        found: Box::new(from_type.or(to_type).unwrap_or_default()),
                     },
                 ));
             }

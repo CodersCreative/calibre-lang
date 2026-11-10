@@ -70,7 +70,9 @@ impl VMEvaluation for VMCallSelf {
                 if func.memo_params == 0 || func.memo_params & (1 << i) != 0 {
                     let val = vm.get_reg_value_in_frame(caller_frame, *reg).clone();
                     match HashKey::try_from(val) {
-                        Ok(k) => key.as_mut().unwrap().push(k),
+                        Ok(k) => {
+                            let _ = key.as_mut().map(|x| x.push(k));
+                        }
                         Err(_) => {
                             key = None;
                             break;
@@ -87,8 +89,7 @@ impl VMEvaluation for VMCallSelf {
                         .entry(func.name.clone())
                         .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
 
-                    let guard = cache_entry.lock().unwrap();
-                    guard.get(&k).cloned()
+                    cache_entry.lock().ok().and_then(|x| x.get(&k).cloned())
                 } {
                     vm.set_reg_value(*dst, val);
                     return Ok(TerminateValue::None);
@@ -108,7 +109,10 @@ impl VMEvaluation for VMCallSelf {
                         .entry(func.name.clone())
                         .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
 
-                    cache_entry.lock().unwrap().insert(k, value.clone());
+                    cache_entry
+                        .lock()
+                        .ok()
+                        .and_then(|mut x| x.insert(k, value.clone()));
                 }
 
                 vm.set_reg_value(*dst, value);

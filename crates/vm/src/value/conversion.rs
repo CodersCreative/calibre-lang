@@ -59,10 +59,14 @@ impl RuntimeValue {
             ))),
             (RuntimeValue::Int(x), MirDataType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Int(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Int(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
-            (RuntimeValue::Int(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::Int(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x.cast_unsigned())),
+            (RuntimeValue::Int(x), MirDataType::Byte) => {
+                Ok(RuntimeValue::Byte(x.cast_unsigned() as u8))
+            }
             (RuntimeValue::Int(x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
-            (RuntimeValue::Int(x), MirDataType::Char) => Ok(RuntimeValue::Char((x as u8) as char)),
+            (RuntimeValue::Int(x), MirDataType::Char) => {
+                Ok(RuntimeValue::Char((x.cast_unsigned() as u8) as char))
+            }
             (RuntimeValue::Int(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
@@ -89,8 +93,12 @@ impl RuntimeValue {
             }
             (RuntimeValue::Range(_, x), MirDataType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Range(_, x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Range(_, x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
-            (RuntimeValue::Range(_, x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::Range(_, x), MirDataType::UInt) => {
+                Ok(RuntimeValue::UInt(x.cast_unsigned()))
+            }
+            (RuntimeValue::Range(_, x), MirDataType::Byte) => {
+                Ok(RuntimeValue::Byte(x.cast_unsigned() as u8))
+            }
             (RuntimeValue::Range(_, x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Bool(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x)),
             (RuntimeValue::Bool(x), MirDataType::Int) => {

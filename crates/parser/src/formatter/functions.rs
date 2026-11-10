@@ -56,7 +56,6 @@ impl FunctionPreFormat {
         }
     }
 
-    #[allow(clippy::type_complexity)]
     fn group_parameters(
         parameters: &[FunctionParam],
         destructure_map: &FxHashMap<usize, &DestructurePattern>,
@@ -76,8 +75,10 @@ impl FunctionPreFormat {
                 })
                 .unwrap_or(false);
 
-            if should_group {
-                groups.last_mut().unwrap().push(param_info);
+            if let Some(group) = groups.last_mut()
+                && should_group
+            {
+                group.push(param_info);
             } else {
                 groups.push(vec![param_info]);
             }
@@ -146,8 +147,10 @@ impl FunctionPreFormat {
                         }
                     })
                     .collect();
-                let last = group.last().unwrap();
+
                 let mut txt = names.join(" ");
+
+                let Some(last) = group.last() else { return txt };
 
                 if let Some(dt) = &last.data_type {
                     txt.push_str(&format!(" : {}", dt));
@@ -185,7 +188,9 @@ impl AstFormatting for AstFunction {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         let mut txt = format!("fn{}", preformat.generics_str);
 
@@ -201,7 +206,7 @@ impl AstFormatting for AstFunction {
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
         let mut txt = format!("fn{}", preformat.generics_str);
 
         if !preformat.param_groups.is_empty() {
@@ -221,7 +226,7 @@ impl AstFormatting for AstFunction {
     }
 
     fn extra_wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
         let mut txt = format!("fn{}", preformat.generics_str);
 
         if !preformat.param_groups.is_empty() {

@@ -109,7 +109,9 @@ impl CallTreeProfiler {
     }
 
     pub fn record_function_enter(&self, task_id: u64, function_name: VariableKey) -> u64 {
-        let mut state = self.state.lock().unwrap();
+        let Ok(mut state) = self.state.lock() else {
+            return 0;
+        };
 
         let call_id = state.next_call_id;
         state.next_call_id += 1;
@@ -133,7 +135,9 @@ impl CallTreeProfiler {
     }
 
     pub fn record_function_exit(&self, task_id: u64, call_id: u64) {
-        let mut state = self.state.lock().unwrap();
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
 
         state.events.push(CallEvent {
             task_id,
@@ -154,7 +158,9 @@ impl CallTreeProfiler {
     }
 
     pub fn record_memoization_hit(&self, task_id: u64, function_name: VariableKey) {
-        let mut state = self.state.lock().unwrap();
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
 
         let call_id = state.next_call_id;
         state.next_call_id += 1;
@@ -175,7 +181,10 @@ impl CallTreeProfiler {
     }
 
     pub fn export(&self) -> String {
-        let state = self.state.lock().unwrap();
+        let Ok(state) = self.state.lock() else {
+            return String::new();
+        };
+
         let num_calls = state.next_call_id as usize;
 
         let mut nodes: Vec<TrieNode> = Vec::new();

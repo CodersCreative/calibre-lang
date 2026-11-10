@@ -86,7 +86,7 @@ impl PatternTranslator for StructPatternTranslator {
                     } else {
                         let mut iter = values.into_iter();
 
-                        let first = iter.next().unwrap();
+                        let first = iter.next().expect("Length already checked, unreachable");
                         let mut cond = AstNode::new(
                             env.context.current_span(),
                             AstNodeType::ComparisonExpression(AstComparison {

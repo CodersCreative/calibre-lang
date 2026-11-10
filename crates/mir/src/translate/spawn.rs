@@ -500,7 +500,11 @@ impl MirLowering for AstSpawn {
                     .lower(env, scope, span, None);
                 }
                 AstNodeType::FunctionDeclaration { .. } => value,
-                _ => unimplemented!(),
+                x => {
+                    return Err(env
+                        .context
+                        .err_at_span(span, MiddleErr::InvalidSpawn(x.to_string())));
+                }
             };
 
             Ok(MiddleNode::new(

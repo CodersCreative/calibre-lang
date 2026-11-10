@@ -33,22 +33,26 @@ impl WaitGroupInner {
     }
 
     pub fn join(&self, other: Arc<WaitGroupInner>) {
-        self.joined.lock().unwrap().push(other);
+        if let Ok(mut joined) = self.joined.lock() {
+            joined.push(other);
+        }
     }
 
     pub fn wait(&self) -> Result<(), RuntimeError> {
-        let mut guard = self.mutex.lock().unwrap();
-
-        while self.count.load(Ordering::Acquire) > 0 {
-            guard = self.cvar.wait(guard).unwrap();
+        if let Ok(mut guard) = self.mutex.lock() {
+            while self.count.load(Ordering::Acquire) > 0 {
+                guard = if let Ok(x) = self.cvar.wait(guard) {
+                    x
+                } else {
+                    return Err(RuntimeError::Io(String::from("Condvar failed waiting")));
+                };
+            }
         }
 
-        drop(guard);
-
-        let joined = self.joined.lock().unwrap();
-
-        for inner in joined.iter() {
-            inner.wait()?;
+        if let Ok(joined) = self.joined.lock() {
+            for inner in joined.iter() {
+                inner.wait()?;
+            }
         }
 
         Ok(())
@@ -77,13 +81,20 @@ impl MutexInner {
     }
 
     pub fn lock(self: &Arc<Self>) -> MutexGuardInner {
-        let mut guard = self.mutex.lock().unwrap();
-        while self.locked.load(Ordering::Acquire) {
-            guard = self.cvar.wait(guard).unwrap();
-        }
+        if let Ok(mut guard) = self.mutex.lock() {
+            while self.locked.load(Ordering::Acquire) {
+                guard = if let Ok(x) = self.cvar.wait(guard) {
+                    x
+                } else {
+                    return MutexGuardInner {
+                        inner: self.clone(),
+                        released: AtomicBool::new(false),
+                    };
+                }
+            }
 
-        self.locked.store(true, Ordering::Release);
-        drop(guard);
+            self.locked.store(true, Ordering::Release);
+        }
 
         MutexGuardInner {
             inner: self.clone(),

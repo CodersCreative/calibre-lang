@@ -12,7 +12,7 @@ pub trait VMEvaluation {
     ) -> Result<TerminateValue, RuntimeError>;
 
     fn run_inner(&self, _vm: &mut VM) {
-        unimplemented!()
+        unreachable!()
     }
 }
 
@@ -97,8 +97,8 @@ pub(crate) fn resolve_slice_range(len: usize, start: isize, end: isize) -> Optio
     }
 
     Some(if e < s {
-        (e as usize, s as usize)
+        (e.cast_unsigned(), s.cast_unsigned())
     } else {
-        (s as usize, e as usize)
+        (s.cast_unsigned(), e.cast_unsigned())
     })
 }

@@ -126,9 +126,10 @@ impl MirLowering for AstIf {
                         return self.then.lower(env, scope, span, data_type);
                     }
                     MiddleNodeType::Identifier(x)
-                        if x.identifier.name() == "false" && self.otherwise.is_some() =>
+                        if x.identifier.name() == "false"
+                            && let Some(otherwise) = self.otherwise =>
                     {
-                        return self.otherwise.unwrap().lower(env, scope, span, data_type);
+                        return otherwise.lower(env, scope, span, data_type);
                     }
                     _ => {}
                 }

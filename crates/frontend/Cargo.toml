@@ -11,6 +11,9 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 default = ["native"]
 native = ["calibre-parser/native", "calibre-mir/native", "calibre-vm/native", "fs"]

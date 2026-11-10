@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         (
             Some(guard),
             if args.flamegraph {
-                let (flame_layer, guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+                let (flame_layer, guard) = FlameLayer::with_file("./tracing.folded")?;
                 let subscriber = Registry::default()
                     .with(fmt_layer)
                     .with(flame_layer)

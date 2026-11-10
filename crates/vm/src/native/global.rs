@@ -127,7 +127,8 @@ impl NativeFunction for Wait {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
-        let val = resolve_int(env, pop_or_null(&mut args))? as u64;
+
+        let val = resolve_int(env, pop_or_null(&mut args))?.cast_unsigned() as u64;
         thread::sleep(Duration::from_millis(val));
 
         Ok(RuntimeValue::Null)
@@ -208,7 +209,7 @@ impl NativeFunction for Len {
                 RuntimeValue::Null => 0,
                 RuntimeValue::HashMap(map) => map.map.len(),
                 RuntimeValue::HashSet(set) => set.set.len(),
-                RuntimeValue::Int(x) => x as usize,
+                RuntimeValue::Int(x) => x.cast_unsigned(),
                 RuntimeValue::UInt(x) => x,
                 RuntimeValue::Float(x) => x as usize,
                 other => {

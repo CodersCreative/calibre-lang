@@ -42,7 +42,7 @@ fn normalize_index(len: usize, index: isize) -> Option<usize> {
     let actual = if index < 0 { len_i64 + index } else { index };
 
     if actual >= 0 && actual < len_i64 {
-        Some(actual as usize)
+        Some(actual.cast_unsigned())
     } else {
         None
     }
@@ -88,8 +88,8 @@ impl VMEvaluation for VMLoadMember {
                 "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
                     state: state.clone(),
                 })),
-                "index" => RuntimeValue::Int(state.lock().unwrap().index),
-                "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
+                "index" => RuntimeValue::Int(state.lock().map(|x| x.index).unwrap_or_default()),
+                "done" => RuntimeValue::Bool(state.lock().ok().is_none_or(|x| x.completed)),
                 _ => {
                     return Err(missing(RuntimeValue::Generator {
                         type_name: TypeImplKey::Nominal(type_name.clone()),
@@ -236,7 +236,7 @@ impl VMEvaluation for VMIndex {
                     .map(|slot| ValueSlot::new(RuntimeValue::GcRef(slot.clone())))
             }
             RuntimeValue::Range(start, end) => {
-                let len = (end - start).max(0) as usize;
+                let len = (end - start).max(0).cast_unsigned();
                 match &index_val {
                     RuntimeValue::Range(slice_start, slice_end) => {
                         resolve_slice_range(len, *slice_start, *slice_end).map(|(s, e)| {

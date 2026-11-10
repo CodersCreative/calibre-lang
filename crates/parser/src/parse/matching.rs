@@ -166,12 +166,17 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             .map(|((field, span), (values, var_type, name))| {
                 if let Some(values) = values {
                     if values.len() == 1 {
-                        let value = values.into_iter().next().unwrap();
+                        let value = values
+                            .into_iter()
+                            .next()
+                            .expect("Length already checked, unreachable");
                         let mut unwrapped = value.unwrap_bit_ors();
                         if unwrapped.len() == 1 {
                             MatchStructFieldPattern::Value {
                                 field: field.to_string(),
-                                value: unwrapped.pop().unwrap(),
+                                value: unwrapped
+                                    .pop()
+                                    .expect("Length already checked, unreachable"),
                             }
                         } else {
                             MatchStructFieldPattern::AlternativeValues {

@@ -76,7 +76,10 @@ impl TestHarness {
     }
 
     fn run_test(&mut self, cal_file: &Path) {
-        let base_name = cal_file.file_stem().unwrap().to_str().unwrap();
+        let Some(base_name) = cal_file.file_stem().and_then(|x| x.to_str()) else {
+            return;
+        };
+
         let lex_file = cal_file.with_extension("lex");
 
         // TODO Find a nice way to test the ast
@@ -260,10 +263,9 @@ impl TestHarness {
 
             report = report.with_note(format!("step: {}", err.step()));
 
-            report
+            let _ = report
                 .finish()
-                .write((&file_id, Source::from(source)), &mut output)
-                .unwrap();
+                .write((&file_id, Source::from(source)), &mut output);
         }
 
         String::from_utf8(output).unwrap_or_else(|_| "Failed to format errors".to_string())

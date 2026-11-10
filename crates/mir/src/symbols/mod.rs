@@ -129,7 +129,10 @@ impl<'a> From<&'a str> for VariableKey {
 
 impl VariableKey {
     pub fn name(&self) -> &Ustr {
-        self.fully_qualified_path.name.as_ref().unwrap()
+        self.fully_qualified_path
+            .name
+            .as_ref()
+            .expect("VariableKey name attempted to be retrieved, but was None")
     }
 }
 
@@ -172,7 +175,10 @@ impl<'a> From<&'a str> for TypeKey {
 
 impl TypeKey {
     pub fn name(&self) -> &Ustr {
-        self.fully_qualified_path.name.as_ref().unwrap()
+        self.fully_qualified_path
+            .name
+            .as_ref()
+            .expect("VariableKey name attempted to be retrieved, but was None")
     }
 }
 

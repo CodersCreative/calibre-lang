@@ -71,9 +71,11 @@ impl LirLowering for MirInt {
         match self.value.int_type {
             IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(self.value.value)),
             IntLiteralType::UInt => {
-                LirNodeType::Literal(LirLiteral::UInt(self.value.value as usize))
+                LirNodeType::Literal(LirLiteral::UInt(self.value.value.cast_unsigned()))
             }
-            IntLiteralType::Byte => LirNodeType::Literal(LirLiteral::Byte(self.value.value as u8)),
+            IntLiteralType::Byte => {
+                LirNodeType::Literal(LirLiteral::Byte(self.value.value.cast_unsigned() as u8))
+            }
         }
     }
 }

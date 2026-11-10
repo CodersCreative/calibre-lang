@@ -29,7 +29,9 @@ impl ExternFunction {
             for (i, a) in args.iter().enumerate() {
                 if self.memo_params == 0 || self.memo_params & (1 << i) != 0 {
                     match HashKey::try_from(a.clone()) {
-                        Ok(k) => key.as_mut().unwrap().push(k),
+                        Ok(k) => {
+                            let _ = key.as_mut().map(|x| x.push(k));
+                        }
                         Err(_) => {
                             key = None;
                             break;
@@ -50,20 +52,20 @@ impl ExternFunction {
                     .entry(symbol.clone())
                     .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
 
-                let guard = cache_entry.lock().unwrap();
-                if let Some(value) = guard.get(&k) {
+                if let Ok(guard) = cache_entry.lock()
+                    && let Some(value) = guard.get(&k)
+                {
                     return Ok(value.clone());
                 }
-                drop(guard);
 
                 let result = self.call_inner(env, args)?;
-                env.caches
+                let _ = env
+                    .caches
                     .memo
                     .entry(symbol)
                     .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())))
                     .lock()
-                    .unwrap()
-                    .insert(k, result.clone());
+                    .map(|mut x| x.insert(k, result.clone()));
                 return Ok(result);
             }
         }
@@ -116,7 +118,7 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Int(x), MirDataType::UInt) => {
                             arg_types.push(Type::u64());
-                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x.cast_unsigned() as u64));
                         }
                         (RuntimeValue::Float(x), MirDataType::Float) => {
                             arg_types.push(Type::f64());
@@ -152,7 +154,10 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Int(x), MirDataType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as usize as *const c_void));
+                            Self::push_arg(
+                                &mut ffi_args,
+                                FfiArg::Ptr(x.cast_unsigned() as *const c_void),
+                            );
                         }
                         (RuntimeValue::Str(x), MirDataType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
@@ -171,7 +176,7 @@ impl ExternFunction {
                             for item in list.0.iter() {
                                 match env.resolve_value_from_ref(&item.get()).unwrap_or_default() {
                                     RuntimeValue::UInt(x) => bytes.push(x as u8),
-                                    RuntimeValue::Int(x) => bytes.push(x as u8),
+                                    RuntimeValue::Int(x) => bytes.push(x.cast_unsigned() as u8),
                                     RuntimeValue::Float(x) => bytes.push(x as u8),
                                     RuntimeValue::Bool(x) => bytes.push(x as u8),
                                     RuntimeValue::Char(x) => bytes.push(x as u8),
@@ -232,7 +237,7 @@ impl ExternFunction {
                         (
                             ParserFfiInnerType::U8 | ParserFfiInnerType::UChar,
                             RuntimeValue::Int(x),
-                        ) => FfiArg::U8(x as u8),
+                        ) => FfiArg::U8(x.cast_unsigned() as u8),
                         (
                             ParserFfiInnerType::U8 | ParserFfiInnerType::UChar,
                             RuntimeValue::Float(x),
@@ -256,7 +261,7 @@ impl ExternFunction {
                         (
                             ParserFfiInnerType::U16 | ParserFfiInnerType::UShort,
                             RuntimeValue::Int(x),
-                        ) => FfiArg::U16(x as u16),
+                        ) => FfiArg::U16(x.cast_unsigned() as u16),
                         (
                             ParserFfiInnerType::U16 | ParserFfiInnerType::UShort,
                             RuntimeValue::Float(x),
@@ -280,7 +285,7 @@ impl ExternFunction {
                         (
                             ParserFfiInnerType::U32 | ParserFfiInnerType::UInt,
                             RuntimeValue::Int(x),
-                        ) => FfiArg::U32(x as u32),
+                        ) => FfiArg::U32(x.cast_unsigned() as u32),
                         (
                             ParserFfiInnerType::U32 | ParserFfiInnerType::UInt,
                             RuntimeValue::Float(x),
@@ -308,7 +313,7 @@ impl ExternFunction {
                             | ParserFfiInnerType::ULong
                             | ParserFfiInnerType::ULongLong,
                             RuntimeValue::Int(x),
-                        ) => FfiArg::U64(x as u64),
+                        ) => FfiArg::U64(x.cast_unsigned() as u64),
                         (
                             ParserFfiInnerType::U64
                             | ParserFfiInnerType::ULong
@@ -334,7 +339,9 @@ impl ExternFunction {
                             RuntimeValue::Float(x),
                         ) => FfiArg::I64(x as i64),
                         (ParserFfiInnerType::USize, RuntimeValue::UInt(x)) => FfiArg::U64(x as u64),
-                        (ParserFfiInnerType::USize, RuntimeValue::Int(x)) => FfiArg::U64(x as u64),
+                        (ParserFfiInnerType::USize, RuntimeValue::Int(x)) => {
+                            FfiArg::U64(x.cast_unsigned() as u64)
+                        }
                         (ParserFfiInnerType::USize, RuntimeValue::Float(x)) => {
                             FfiArg::U64(x as u64)
                         }

@@ -62,10 +62,9 @@ impl SchedulerHandle {
             .map(|n| n.get())
             .unwrap_or(2);
 
+        if let Ok(mut workers) = inner.workers.lock()
+            && let Ok(mut handles) = inner.handles.lock()
         {
-            let mut workers = inner.workers.lock().unwrap();
-            let mut handles = inner.handles.lock().unwrap();
-
             for _ in 0..worker_count {
                 let worker = Arc::new(Worker {
                     queue: Mutex::new(VecDeque::new()),
@@ -88,7 +87,10 @@ impl SchedulerHandle {
         }
 
         let worker = {
-            let mut workers = self.inner.workers.lock().unwrap();
+            let Ok(mut workers) = self.inner.workers.lock() else {
+                return;
+            };
+
             let mut selected = None;
             let mut best_load = usize::MAX;
 
@@ -107,9 +109,14 @@ impl SchedulerHandle {
                     quantum: self.inner.quantum,
                     tasks: AtomicUsize::new(0),
                 });
+
                 let handle = Self::start_worker(worker.clone(), self.inner.clone());
-                let mut handles = self.inner.handles.lock().unwrap();
+                let Ok(mut handles) = self.inner.handles.lock() else {
+                    return;
+                };
+
                 handles.push(handle);
+
                 workers.push(worker.clone());
                 selected = Some(worker);
             }
@@ -123,19 +130,18 @@ impl SchedulerHandle {
 
         let task_id = base_vm.profiler.as_ref().map(|p| p.generate_task_id());
 
-        let mut vm = {
-            let mut pool = self.inner.vm_pool.lock().unwrap();
-            if let Some(mut pooled_vm) = pool.pop_front() {
-                pooled_vm.task_state = Default::default();
-                pooled_vm.captured_output = Vec::default();
-                pooled_vm
-            } else {
-                VM::new_shared(
-                    base_vm.registry.clone(),
-                    base_vm.mappings.clone(),
-                    base_vm.config.clone(),
-                )
-            }
+        let mut vm = if let Ok(mut pool) = self.inner.vm_pool.lock()
+            && let Some(mut pooled_vm) = pool.pop_front()
+        {
+            pooled_vm.task_state = Default::default();
+            pooled_vm.captured_output = Vec::default();
+            pooled_vm
+        } else {
+            VM::new_shared(
+                base_vm.registry.clone(),
+                base_vm.mappings.clone(),
+                base_vm.config.clone(),
+            )
         };
 
         if let Some(task_id) = task_id {
@@ -146,13 +152,16 @@ impl SchedulerHandle {
             vm.ptr_heap = base_vm.ptr_heap.clone();
         }
 
-        let mut queue = worker.queue.lock().unwrap();
         worker.tasks.fetch_add(1, Ordering::AcqRel);
-        queue.push_back(Task {
-            vm,
-            func,
-            wait_group,
-        });
+
+        if let Ok(mut queue) = worker.queue.lock() {
+            queue.push_back(Task {
+                vm,
+                func,
+                wait_group,
+            });
+        }
+
         worker.cvar.notify_one();
     }
 
@@ -160,31 +169,46 @@ impl SchedulerHandle {
         thread::spawn(move || {
             loop {
                 let mut task = {
-                    let mut queue = worker.queue.lock().unwrap();
+                    let Ok(mut queue) = worker.queue.lock() else {
+                        return;
+                    };
+
                     loop {
                         if let Some(task) = queue.pop_front() {
                             break task;
                         }
+
                         if scheduler.shutdown.load(Ordering::Acquire) {
                             return;
                         }
-                        queue = worker.cvar.wait(queue).unwrap();
+
+                        queue = if let Ok(x) = worker.cvar.wait(queue) {
+                            x
+                        } else {
+                            return;
+                        };
                     }
                 };
 
                 if let Some(status) = run_task_slice(&mut task, worker.quantum, &scheduler) {
                     match status {
                         TaskStatus::Yielded => {
-                            let mut queue = worker.queue.lock().unwrap();
+                            let Ok(mut queue) = worker.queue.lock() else {
+                                continue;
+                            };
+
                             queue.push_back(task);
                         }
                         TaskStatus::Finished => {
                             worker.tasks.fetch_sub(1, Ordering::AcqRel);
+
                             if let Some(wg) = task.wait_group.take() {
                                 wg.done();
                             }
-                            let mut pool = scheduler.vm_pool.lock().unwrap();
-                            pool.push_back(task.vm);
+
+                            if let Ok(mut pool) = scheduler.vm_pool.lock() {
+                                pool.push_back(task.vm);
+                            }
                         }
                     }
                 }
@@ -195,16 +219,16 @@ impl SchedulerHandle {
     fn stop_workers(&self) {
         self.inner.shutdown.store(true, Ordering::Release);
 
-        let workers = self.inner.workers.lock().unwrap();
-        for worker in workers.iter() {
-            worker.cvar.notify_all();
+        if let Ok(workers) = self.inner.workers.lock() {
+            for worker in workers.iter() {
+                worker.cvar.notify_all();
+            }
         }
 
-        drop(workers);
-
-        let mut handles = self.inner.handles.lock().unwrap();
-        for handle in handles.drain(..) {
-            let _ = handle.join();
+        if let Ok(mut handles) = self.inner.handles.lock() {
+            for handle in handles.drain(..) {
+                let _ = handle.join();
+            }
         }
     }
 }

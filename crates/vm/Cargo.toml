@@ -11,6 +11,9 @@ keywords.workspace = true
 categories.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 tracing = { workspace = true }
 calibre-lir = { workspace = true }

@@ -244,10 +244,10 @@ impl FunctionLowering {
             }
 
             for (i, target_idx, target_id) in merges {
-                if blocks[i].is_some() && blocks[target_idx].is_some() {
-                    let target_block = blocks[target_idx].take().unwrap();
-                    let block = blocks[i].as_mut().unwrap();
-
+                if blocks[i].is_some()
+                    && let Some(target_block) = blocks[target_idx].take()
+                    && let Some(block) = blocks[i].as_mut()
+                {
                     block.instructions.pop();
                     let last_span = block.instruction_spans.pop().unwrap_or_default();
 

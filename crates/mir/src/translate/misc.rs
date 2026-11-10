@@ -58,8 +58,8 @@ impl MirLowering for AstTag {
             .tag_handlers
             .get(&Ustr::from(&self.tag.text))
             .cloned()
+            && let Ok(handler_fn) = handler.handler.lock()
         {
-            let handler_fn = handler.handler.lock().unwrap();
             handler_fn(env, scope, *self.node, data_type, self.arguments)
         } else {
             env.context.push_error(MiddleErr::InvalidTag(self.tag.text));

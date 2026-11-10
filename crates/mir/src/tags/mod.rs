@@ -723,7 +723,14 @@ impl MiddleEnvironment {
 
                 let operator = match args.pop().map(|x| x.node_type) {
                     Some(AstNodeType::StringLiteral(x)) => x.value,
-                    _ => unimplemented!(),
+                    _ => {
+                        return Err(env.context.err_at_span(
+                            span,
+                            MiddleErr::Overload(String::from(
+                                "@overload tag expects the operators to be within a string",
+                            )),
+                        ));
+                    }
                 };
 
                 match node.node_type {
@@ -778,12 +785,26 @@ impl MiddleEnvironment {
                                     env.symbols.overloads.push(processed);
                                 }
                             }
-                            _ => unimplemented!(),
+                            x => {
+                                return Err(env.context.err_at_span(
+                                    span,
+                                    MiddleErr::Overload(format!(
+                                        "@overload tag cannot handle this node : {x}"
+                                    )),
+                                ));
+                            }
                         }
 
                         return x.lower(env, scope, span, data_type);
                     }
-                    _ => unimplemented!(),
+                    x => {
+                        return Err(env.context.err_at_span(
+                            span,
+                            MiddleErr::Overload(format!(
+                                "@overload tag cannot handle this node : {x}"
+                            )),
+                        ));
+                    }
                 }
 
                 Ok(MiddleNode::new(MiddleNodeType::EmptyLine, span))

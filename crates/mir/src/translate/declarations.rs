@@ -279,7 +279,12 @@ impl MirLowering for AstDeclaration {
                 env.resolve(scope, identifier, ResolutionOptions::idents())?
                     .unwrap_variable()
             } else {
-                env.register_variable(scope, identifier, data_type.clone().unwrap(), self.var_type)?
+                env.register_variable(
+                    scope,
+                    identifier,
+                    data_type.clone().expect("data_type should be Some by now"),
+                    self.var_type,
+                )?
             };
 
             env.add_function_template(scope, key.clone(), func, Vec::new());
@@ -321,7 +326,7 @@ impl MirLowering for AstDeclaration {
                     env.register_variable(
                         scope,
                         identifier,
-                        data_type.clone().unwrap(),
+                        data_type.clone().expect("data_type should be Some by now"),
                         self.var_type,
                     )?
                 }
@@ -352,7 +357,12 @@ impl MirLowering for AstDeclaration {
                 env.resolve(scope, identifier, ResolutionOptions::idents())?
                     .unwrap_variable()
             } else {
-                env.register_variable(scope, identifier, data_type.clone().unwrap(), self.var_type)?
+                env.register_variable(
+                    scope,
+                    identifier,
+                    data_type.clone().expect("data_type should be Some by now"),
+                    self.var_type,
+                )?
             }
         };
 
@@ -361,7 +371,7 @@ impl MirLowering for AstDeclaration {
                 var_type: self.var_type,
                 identifier: var_key,
                 value: Box::new(value),
-                data_type: data_type.unwrap(),
+                data_type: data_type.expect("data_type should be Some by now"),
             }),
             span,
         ))

@@ -54,6 +54,8 @@ pub enum MiddleErr {
     UnexpectedMacroArgType(String),
     #[error("Function marked as @pure but has no return type.")]
     PureFunctionNoReturnType,
+    #[error("Cannot spawn : {0:?}")]
+    InvalidSpawn(String),
     #[error("Overload Invalid : {0:?}")]
     Overload(String),
     #[error("Unable to find object : {0:?}")]
@@ -263,6 +265,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::MissingStructField { .. } => "M033",
             Self::InvalidMutation { .. } => "M034",
             Self::VariableMoved { .. } => "M035",
+            Self::InvalidSpawn(_) => "M036",
             // Type inference failures (codes M050-M099)
             Self::CannotInferVariableType(_) => "M050",
             Self::CannotInferReturnType(_) => "M051",

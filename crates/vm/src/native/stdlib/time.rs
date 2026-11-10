@@ -17,8 +17,11 @@ impl NativeFunction for UnixNow {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[0])?;
 
-        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|x| x.as_millis())
+            .unwrap_or_default();
 
-        Ok(RuntimeValue::UInt(time.as_millis() as usize))
+        Ok(RuntimeValue::UInt(time as usize))
     }
 }

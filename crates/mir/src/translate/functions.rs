@@ -664,7 +664,8 @@ impl MiddleEnvironment {
                 .unwrap_or_else(|| ParserDataType::auto(span));
 
             let list_arg = if args.len() == 1 {
-                let arg: AstNode = args.pop().unwrap().into();
+                let arg: AstNode = args.pop()?.into();
+
                 let is_already_list = matches!(arg.node_type, AstNodeType::ListLiteral(_))
                     || arg
                         .type_of(self, scope, span)
@@ -1124,8 +1125,11 @@ fn lower_basic_call(
         });
 
     match caller.value.get_ident().text().as_str() {
-        "discriminant" if call.args.len() == 1 => {
-            let value = AstNode::from(call.args.pop().unwrap()).lower(env, scope, span, None)?;
+        "discriminant"
+            if call.args.len() == 1
+                && let Some(value) = call.args.pop() =>
+        {
+            let value = AstNode::from(value).lower(env, scope, span, None)?;
             Ok(Some(MiddleNode::new(
                 MiddleNodeType::Discriminant(MirDiscriminant {
                     value: Box::new(value),
@@ -1141,8 +1145,12 @@ fn lower_basic_call(
             std::mem::take(&mut call.reverse_args),
             parameters.as_deref(),
         ))),
-        "curry" if call.args.len() == 1 && call.reverse_args.is_empty() => {
-            let value = env.rewrite_curry_call(scope, span, call.args.pop().unwrap().into())?;
+        "curry"
+            if call.args.len() == 1
+                && call.reverse_args.is_empty()
+                && let Some(value) = call.args.pop() =>
+        {
+            let value = env.rewrite_curry_call(scope, span, value.into())?;
             Ok(Some(value.lower(env, scope, span, None)?))
         }
         _ => {

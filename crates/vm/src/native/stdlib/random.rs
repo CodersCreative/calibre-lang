@@ -35,7 +35,7 @@ impl NativeFunction for Seed {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
         let val = resolve_int(env, pop_or_null(&mut args))?;
-        fastrand::seed(val as u64);
+        fastrand::seed(val.cast_unsigned() as u64);
         Ok(RuntimeValue::Null)
     }
 }

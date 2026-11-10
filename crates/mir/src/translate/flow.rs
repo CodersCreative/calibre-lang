@@ -678,11 +678,13 @@ impl MirLowering for AstReturn {
                             Some(value) if !value.is_none() => {
                                 node_ty = value.type_of(env, scope, span);
 
-                                if node_ty.as_ref().is_none_or(|x| !x.is_gen()) {
+                                if node_ty.as_ref().is_none_or(|x| !x.is_gen())
+                                    && let Some(value) = self.value
+                                {
                                     return AstNode::call(
                                         span,
                                         AstNode::identifier(span, "gen_suspend"),
-                                        vec![CallArg::Value(*self.value.unwrap())],
+                                        vec![CallArg::Value(*value)],
                                     )
                                     .lower(env, scope, span, data_type);
                                 }

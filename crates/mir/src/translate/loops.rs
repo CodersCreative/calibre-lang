@@ -486,8 +486,16 @@ impl MirLowering for AstLoop {
 
                 if let Some(else_body) = self.else_body.take() {
                     let temp_names = LoopTempNames::new(env, span, true);
-                    let result_ident = ParserText::from(temp_names.result.unwrap());
-                    let broke_ident = ParserText::from(temp_names.broke.unwrap());
+                    let result_ident = ParserText::from(
+                        temp_names
+                            .result
+                            .expect("loop result name not generated but required"),
+                    );
+                    let broke_ident = ParserText::from(
+                        temp_names
+                            .broke
+                            .expect("loop result name not generated but required"),
+                    );
 
                     let result_decl = AstNode::var_decl(
                         span,

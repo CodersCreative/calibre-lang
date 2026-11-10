@@ -11,6 +11,9 @@ keywords.workspace = true
 categories.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 tracing = { workspace = true }
 calibre-lir = { workspace = true }
@@ -28,6 +31,3 @@ cranelift-native = "0.137"
 cranelift-object = "0.137"
 cranelift-jit = "0.137"
 libc = "0"
-
-[lints]
-workspace = true

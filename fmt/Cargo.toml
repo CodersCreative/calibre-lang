@@ -11,6 +11,9 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 name = "calibre_fmt"
 path = "src/lib.rs"

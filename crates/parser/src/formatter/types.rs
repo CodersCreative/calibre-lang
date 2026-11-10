@@ -62,7 +62,9 @@ impl AstFormatting for TypeDefType {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         match preformat.kind {
             TypeDefKind::Enum {
@@ -101,7 +103,7 @@ impl AstFormatting for TypeDefType {
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
 
         Some(match preformat.kind {
             TypeDefKind::Enum { multi, .. } => multi,

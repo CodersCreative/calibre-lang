@@ -47,7 +47,9 @@ impl NativeFunction for GeneratorResumeFn {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[0])?;
 
-        let mut state = self.state.lock().unwrap();
+        let Ok(mut state) = self.state.lock() else {
+            return Ok(RuntimeValue::Option(None));
+        };
 
         if state.completed {
             return Ok(RuntimeValue::Option(None));

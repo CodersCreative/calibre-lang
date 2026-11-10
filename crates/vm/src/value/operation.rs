@@ -36,12 +36,20 @@ pub fn comparison(
             (RuntimeValue::Int(a), RuntimeValue::Int(b)) => Some(a == b),
             (RuntimeValue::UInt(a), RuntimeValue::UInt(b)) => Some(a == b),
             (RuntimeValue::Byte(a), RuntimeValue::Byte(b)) => Some(a == b),
-            (RuntimeValue::Int(a), RuntimeValue::UInt(b)) => Some(*a >= 0 && (*a as usize) == *b),
-            (RuntimeValue::UInt(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as usize)),
+            (RuntimeValue::Int(a), RuntimeValue::UInt(b)) => {
+                Some(*a >= 0 && a.cast_unsigned() == *b)
+            }
+            (RuntimeValue::UInt(a), RuntimeValue::Int(b)) => {
+                Some(*b >= 0 && *a == b.cast_unsigned())
+            }
             (RuntimeValue::UInt(a), RuntimeValue::Byte(b)) => Some(*a == *b as usize),
             (RuntimeValue::Byte(a), RuntimeValue::UInt(b)) => Some(*a as usize == *b),
-            (RuntimeValue::Int(a), RuntimeValue::Byte(b)) => Some(*a >= 0 && (*a as u8) == *b),
-            (RuntimeValue::Byte(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as u8)),
+            (RuntimeValue::Int(a), RuntimeValue::Byte(b)) => {
+                Some(*a >= 0 && (a.cast_unsigned() as u8) == *b)
+            }
+            (RuntimeValue::Byte(a), RuntimeValue::Int(b)) => {
+                Some(*b >= 0 && *a == (b.cast_unsigned() as u8))
+            }
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
             (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
             (RuntimeValue::Str(a), RuntimeValue::Str(b)) => Some(a == b),
@@ -207,7 +215,9 @@ pub fn comparison(
                 )))
             } else {
                 Ok(RuntimeValue::Bool(comparison_value_handle(
-                    op, x as usize, y,
+                    op,
+                    x.cast_unsigned(),
+                    y,
                 )))
             }
         }
@@ -221,7 +231,9 @@ pub fn comparison(
                 )))
             } else {
                 Ok(RuntimeValue::Bool(comparison_value_handle(
-                    op, x, y as usize,
+                    op,
+                    x,
+                    y.cast_unsigned(),
                 )))
             }
         }
@@ -523,7 +535,7 @@ impl RuntimeValue {
                 if y < 0 {
                     Ok(RuntimeValue::Float((x as f64).powf(y as f64)))
                 } else {
-                    Ok(RuntimeValue::Int(x.pow(y as u32)))
+                    Ok(RuntimeValue::Int(x.pow(y.cast_unsigned() as u32)))
                 }
             }
             (RuntimeValue::Int(x), RuntimeValue::UInt(y)) => Ok(RuntimeValue::Int(x.pow(y as u32))),
@@ -541,7 +553,7 @@ impl RuntimeValue {
                 if y < 0 {
                     Ok(RuntimeValue::Float((x as f64).powf(y as f64)))
                 } else {
-                    Ok(RuntimeValue::UInt(x.pow(y as u32)))
+                    Ok(RuntimeValue::UInt(x.pow(y.cast_unsigned() as u32)))
                 }
             }
             (RuntimeValue::UInt(x), RuntimeValue::Float(y)) => {
@@ -567,7 +579,9 @@ impl RuntimeValue {
                 if y < 0 {
                     Ok(RuntimeValue::Float((x as f64).powf(y as f64)))
                 } else {
-                    Ok(RuntimeValue::UInt((x as usize).pow(y as u32)))
+                    Ok(RuntimeValue::UInt(
+                        (x as usize).pow(y.cast_unsigned() as u32),
+                    ))
                 }
             }
             (RuntimeValue::Byte(x), RuntimeValue::Float(y)) => {

@@ -167,10 +167,12 @@ impl AstNode {
 
     pub fn new_temp_scope_with_create(body: Vec<AstNode>, create_new_scope: bool) -> Self {
         Self::new(
-            if body.is_empty() {
-                Span::default()
+            if let Some(first) = body.first()
+                && let Some(last) = body.last()
+            {
+                Span::new_from_spans(first.span, last.span)
             } else {
-                Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
+                Span::default()
             },
             AstNodeType::ScopeDeclaration(AstScopeDef {
                 body,

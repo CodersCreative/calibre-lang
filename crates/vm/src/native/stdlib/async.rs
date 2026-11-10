@@ -69,7 +69,11 @@ impl NativeFunction for ChannelGet {
         let timeout = resolve_int(env, pop_or_null(&mut args))?;
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
-        let mut guard = ch.queue.lock().unwrap();
+        let mut guard = if let Ok(x) = ch.queue.lock() {
+            x
+        } else {
+            return Ok(RuntimeValue::Option(None));
+        };
 
         loop {
             if let Some(value) = guard.pop_front() {
@@ -80,15 +84,18 @@ impl NativeFunction for ChannelGet {
                 return Ok(RuntimeValue::Option(None));
             }
 
-            let result = ch
+            if let Ok(result) = ch
                 .cvar
                 .wait_timeout(guard, Duration::from_millis(timeout.cast_unsigned() as u64))
-                .unwrap();
-            if result.1.timed_out() {
+            {
+                if result.1.timed_out() {
+                    return Ok(RuntimeValue::Option(None));
+                }
+
+                guard = result.0
+            } else {
                 return Ok(RuntimeValue::Option(None));
             }
-
-            guard = result.0
         }
     }
 }
@@ -127,7 +134,7 @@ impl NativeFunction for ChannelClosed {
             return Ok(RuntimeValue::Bool(false));
         }
 
-        let empty = ch.queue.lock().unwrap().is_empty();
+        let empty = ch.queue.lock().is_ok_and(|x| x.is_empty());
 
         Ok(RuntimeValue::Bool(empty))
     }

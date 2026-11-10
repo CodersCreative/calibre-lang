@@ -119,11 +119,11 @@ pub trait AstPrattParserFoldable {
     type Value;
 
     fn fold_postfix(_base: AstNode, _value: Self::Value, _sp: SimpleSpan) -> AstNode {
-        unimplemented!()
+        unreachable!()
     }
 
     fn fold_prefix(_value: Self::Value, _base: AstNode, _sp: SimpleSpan) -> AstNode {
-        unimplemented!()
+        unreachable!()
     }
 
     fn fold_infix(
@@ -132,7 +132,7 @@ pub trait AstPrattParserFoldable {
         _right: AstNode,
         _sp: SimpleSpan,
     ) -> AstNode {
-        unimplemented!()
+        unreachable!()
     }
 }
 

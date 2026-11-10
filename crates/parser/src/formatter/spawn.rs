@@ -14,7 +14,9 @@ impl AstFormatting for AstSpawn {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         if self.items.len() == 1 {
             format!("{} {}", preformat.prefix, preformat.items[0])
@@ -24,7 +26,7 @@ impl AstFormatting for AstSpawn {
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
 
         Some(if self.items.len() == 1 {
             format!("{} {}", preformat.prefix, preformat.items[0])
@@ -69,7 +71,9 @@ impl AstFormatting for AstSelect {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         if preformat.arms.is_empty() {
             return String::from("select { }");
@@ -91,7 +95,7 @@ impl AstFormatting for AstSelect {
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
 
         if preformat.arms.is_empty() {
             return Some(String::from("select { }"));

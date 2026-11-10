@@ -96,8 +96,8 @@ impl Key {
 
     pub fn unwrap_dollar(self) -> Ustr {
         match self {
-            Self::TypeKey(x) => x.fully_qualified_path.name.unwrap(),
-            Self::VariableKey(x) => x.fully_qualified_path.name.unwrap(),
+            Self::TypeKey(x) => x.fully_qualified_path.name.unwrap_or_default(),
+            Self::VariableKey(x) => x.fully_qualified_path.name.unwrap_or_default(),
         }
     }
 }
@@ -627,13 +627,19 @@ impl MiddleEnvironment {
 
                 if name_str == "ptr" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::Ptr(Box::new(
-                        resolved_gens.into_iter().next().unwrap(),
+                        resolved_gens
+                            .into_iter()
+                            .next()
+                            .expect("Length already checked, unreachable"),
                     )));
                 }
 
                 if name_str == "list" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::List(Box::new(
-                        resolved_gens.into_iter().next().unwrap(),
+                        resolved_gens
+                            .into_iter()
+                            .next()
+                            .expect("Length already checked, unreachable"),
                     )));
                 }
 
@@ -788,7 +794,9 @@ impl MiddleEnvironment {
                 if let Some(node) = self.scoping.resolve_macro_arg(scope, &Ustr::from(x)) {
                     let AstNodeType::DataType(AstDataType { data_type }) = node.node_type.clone()
                     else {
-                        unimplemented!()
+                        return Err(self.context.err_at_current(
+                            MiddleErr::CannotInferFromExpression(node.to_string()),
+                        ));
                     };
 
                     self.resolve_data_type(scope, &data_type, options)?

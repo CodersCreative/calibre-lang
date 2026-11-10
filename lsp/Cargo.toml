@@ -11,6 +11,9 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 clap = { workspace = true }
 calibre-parser = { workspace = true, features=["native"] }

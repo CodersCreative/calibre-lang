@@ -17,14 +17,16 @@ impl AstFormatting for AstMatch {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         let value = preformat.value_str.as_deref().unwrap_or("");
         format!("match {}{}", value, self.body.narrow_format(formatter))
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
 
         let value = preformat.value_str.as_deref().unwrap_or("");
         Some(format!(
@@ -43,7 +45,9 @@ impl AstFormatting for AstFnMatch {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         format!(
             "fn match{}{}{} {}",
@@ -55,7 +59,7 @@ impl AstFormatting for AstFnMatch {
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
+        let preformat = self.preformat(formatter)?;
 
         Some(format!(
             "fn match{}{}{} {}",
@@ -75,7 +79,9 @@ impl AstFormatting for MatchBody {
     }
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let preformat = self.preformat(formatter).unwrap();
+        let Some(preformat) = self.preformat(formatter) else {
+            return String::new();
+        };
 
         if preformat.arms.is_empty() {
             return String::from("{ }");

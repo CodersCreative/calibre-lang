@@ -110,7 +110,10 @@ impl ManifestScoping {
         let mut ids = FxHashMap::default();
 
         for node in value.scopes.iter() {
-            let original_id = value.scopes.get_node_id(node).unwrap();
+            let Some(original_id) = value.scopes.get_node_id(node) else {
+                continue;
+            };
+
             let scope = node.get();
 
             let manifest = ManifestScope {
@@ -130,7 +133,10 @@ impl ManifestScoping {
         }
 
         for node in value.scopes.iter() {
-            let original_id = value.scopes.get_node_id(node).unwrap();
+            let Some(original_id) = value.scopes.get_node_id(node) else {
+                continue;
+            };
+
             if let Some(new_id) = ids.get(&original_id)
                 && let Some(scope_mut) = scopes.get_mut(*new_id)
             {
@@ -145,7 +151,9 @@ impl ManifestScoping {
         }
 
         for node in value.scopes.iter() {
-            let original_id = value.scopes.get_node_id(node).unwrap();
+            let Some(original_id) = value.scopes.get_node_id(node) else {
+                continue;
+            };
 
             if let Some(new_id) = ids.get(&original_id)
                 && let Some(original_parent) = original_id.parent(&value.scopes)
@@ -168,7 +176,10 @@ impl Scoping {
         let mut ids = FxHashMap::default();
 
         for node in value.scopes.iter() {
-            let original_id = value.scopes.get_node_id(node).unwrap();
+            let Some(original_id) = value.scopes.get_node_id(node) else {
+                continue;
+            };
+
             let scope = node.get();
 
             let middle_scope = MiddleScope {
@@ -190,7 +201,10 @@ impl Scoping {
         }
 
         for node in value.scopes.iter() {
-            let original_id = value.scopes.get_node_id(node).unwrap();
+            let Some(original_id) = value.scopes.get_node_id(node) else {
+                continue;
+            };
+
             if let Some(new_id) = ids.get(&original_id)
                 && let Some(scope_mut) = self.scopes.get_mut(*new_id)
             {
@@ -205,7 +219,9 @@ impl Scoping {
         }
 
         for node in value.scopes.iter() {
-            let original_id = value.scopes.get_node_id(node).unwrap();
+            let Some(original_id) = value.scopes.get_node_id(node) else {
+                continue;
+            };
 
             if let Some(new_id) = ids.get(&original_id)
                 && let Some(original_parent) = original_id.parent(&value.scopes)
@@ -219,10 +235,7 @@ impl Scoping {
                     parent.append(*new_id, &mut self.scopes);
                     self.scopes
                         .get_mut(parent)
-                        .unwrap()
-                        .get_mut()
-                        .children
-                        .insert(root_name, *new_id);
+                        .map(|x| x.get_mut().children.insert(root_name, *new_id));
                 }
             }
         }

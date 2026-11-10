@@ -57,7 +57,11 @@ impl MirLowering for AstList {
         }
 
         Ok(MiddleNode {
-            node_type: MiddleNodeType::ListLiteral(value.build().unwrap()),
+            node_type: MiddleNodeType::ListLiteral(
+                value
+                    .build()
+                    .map_err(|e| MiddleErr::Internal(format!("{}", e)))?,
+            ),
             span,
         })
     }

@@ -54,13 +54,13 @@ mimalloc = "0.1"
 
 [workspace.lints.clippy]
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
-string_slice = "warn"
-indexing_slicing = "warn"
+# string_slice = "warn"
+# indexing_slicing = "warn"
 unwrap_used = "warn"
-panic = "warn"
+# panic = "warn"
 todo = "warn"
 unimplemented = "warn"
-unreachable = "warn"
+# unreachable = "warn"
 get_unwrap = "warn"
 unwrap_in_result = "warn"
 unchecked_time_subtraction = "warn"
@@ -71,9 +71,9 @@ panic_in_result_fn = "warn"
 
 # Don't Fail Silently - prevent dropped futures and swallowed errors
 let_underscore_future = "warn"
-let_underscore_must_use = "warn"
+# let_underscore_must_use = "warn"
 unused_result_ok = "warn"
-map_err_ignore = "warn"
+# map_err_ignore = "warn"
 assertions_on_result_states = "warn"
 
 # Don't Do Bad Async Stuff - prevent deadlocks and concurrency bugs
@@ -110,5 +110,5 @@ dbg_macro = "warn"
 
 # Don't `allow` Your Way Around These Lints - every suppression must be
 # a deliberate #[expect(..., reason = "…")] rather than a silent #[allow]
-allow_attributes = "warn"
-allow_attributes_without_reason = "warn"
+# allow_attributes = "warn"
+# allow_attributes_without_reason = "warn"

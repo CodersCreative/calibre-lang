@@ -58,7 +58,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                             .collect::<Vec<_>>().padded_by(potential_new_line()).delimited_by(just(Token::Lesser), just(Token::Greater))
                     .map_with_span(|types, span| {
                         if types.len() == 1 {
-                            ParserDataType::new(span, ParserInnerType::Paren(Box::new(types.into_iter().next().unwrap())))
+                            ParserDataType::new(span, ParserInnerType::Paren(Box::new(types.into_iter().next().expect("Length already checked, unreachable"))))
                         } else {
                             ParserDataType::new(span, ParserInnerType::Tuple(types))
                         }
@@ -109,7 +109,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     )
                     .map_with_span(|types, span| {
                         let mut types = types.into_iter().rev();
-                        let mut function = types.next().unwrap();
+                        if let Some(mut function) = types.next() {
 
                         for parameter in types {
                             function = ParserDataType::function(
@@ -120,6 +120,9 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         }
 
                         function
+                    }else {
+                        ParserDataType::null(span)
+                    }
                     })
                     .boxed();
 
@@ -137,11 +140,11 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         Ok(if let Some(generic_types) = generic_types && !generic_types.is_empty() {
                             match name {
                                 "list" => {
-                                    if generic_types.len() == 1 {
+                                    if generic_types.len() == 1 && let Some(ty) = generic_types.into_iter().next() {
                                         ParserDataType::new(
                                             span,
                                             ParserInnerType::List(Box::new(
-                                                generic_types.into_iter().next().unwrap(),
+                                                ty,
                                             )),
                                         )
                                     } else {
@@ -152,11 +155,11 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                                     }
                                 }
                                 "ptr" => {
-                                    if generic_types.len() == 1 {
+                                    if generic_types.len() == 1 && let Some(ty) = generic_types.into_iter().next() {
                                         ParserDataType::new(
                                             span,
                                             ParserInnerType::Ptr(Box::new(
-                                                generic_types.into_iter().next().unwrap(),
+                                                ty,
                                             )),
                                         )
                                     } else {
@@ -167,11 +170,11 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                                     }
                                 }
                                 "option" => {
-                                    if generic_types.len() == 1 {
+                                    if generic_types.len() == 1 && let Some(ty) = generic_types.into_iter().next() {
                                         ParserDataType::new(
                                             span,
                                             ParserInnerType::Option(Box::new(
-                                                generic_types.into_iter().next().unwrap(),
+                                                ty,
                                             )),
                                         )
                                     } else {
@@ -187,8 +190,8 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                                         ParserDataType::new(
                                             span,
                                             ParserInnerType::Result {
-                                                ok: Box::new(types.next().unwrap()),
-                                                err: Box::new(types.next().unwrap()),
+                                                ok: Box::new(types.next().expect("Length already checked, unreachable")),
+                                                err: Box::new(types.next().expect("Length already checked, unreachable")),
                                             },
                                         )
                                     } else {
