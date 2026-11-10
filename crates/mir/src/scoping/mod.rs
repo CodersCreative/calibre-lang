@@ -21,6 +21,7 @@ pub type ScopeId = NodeId;
 pub struct Scoping {
     pub scopes: Arena<MiddleScope>,
     pub loop_stack: Vec<LoopContext>,
+    pub scope_stack: Vec<ScopeContext>,
     pub return_type_stack: Vec<MirDataType>,
     pub generic_param_stack: Vec<Vec<Ustr>>,
     pub all_time_generics: UstrSet,
@@ -369,6 +370,14 @@ pub struct LoopContext {
     pub label: Option<Ustr>,
     pub result_target: Option<Ustr>,
     pub continue_inject: Option<AstNode>,
+    pub data_type: Option<MirDataType>,
+    pub scope_id: ScopeId,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScopeContext {
+    pub label: Option<Ustr>,
+    pub result_target: Option<Ustr>,
     pub data_type: Option<MirDataType>,
     pub scope_id: ScopeId,
 }

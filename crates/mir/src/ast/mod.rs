@@ -285,7 +285,7 @@ impl MiddleNode {
                 ..
             }) => left.calls_self(name) || right.calls_self(name),
             MiddleNodeType::AsExpression(MirAs { value, .. })
-            | MiddleNodeType::Emit(MirEmit { value })
+            | MiddleNodeType::Emit(MirEmit { value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
@@ -458,6 +458,7 @@ pub struct MirReturn {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirEmit {
+    pub label: Option<Ustr>,
     pub value: Box<MiddleNode>,
 }
 

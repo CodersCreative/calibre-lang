@@ -2,16 +2,16 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType, MirScopeDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::{ScopeId, ScopeMacro},
-    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
+    scoping::{ScopeContext, ScopeId, ScopeMacro},
+    symbols::{
+        VariableKey,
+        resolve::{KeyOrAstNode, ResolutionOptions},
+    },
     translate::MirLowering,
 };
 use calibre_parser::{
     Span,
-    ast::{
-        idents::PotentialDollarIdentifier,
-        nodes::{AstNode, scopes::AstScopeDef},
-    },
+    ast::nodes::{AstNode, scopes::AstScopeDef},
 };
 use tracing::instrument;
 use ustr::Ustr;
@@ -63,32 +63,28 @@ impl MirLowering for AstScopeDef {
 
             let mut added = Vec::new();
 
-            let scope_macro_args: Vec<(PotentialDollarIdentifier, AstNode)> = {
-                let scope_macro = env.scoping.resolve_macro(scope, &name).ok_or_else(|| {
-                    MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string())))
-                })?;
+            if let Some(scope_macro_args) = env.scoping.resolve_macro(scope, &name).map(|x| {
+                self.body = x.body.clone();
+                x.args.clone()
+            }) {
+                for arg in &named.args {
+                    let arg_text = env
+                        .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar();
 
-                self.body = scope_macro.body.clone();
-                scope_macro.args.clone()
-            };
-
-            for arg in &named.args {
-                let arg_text = env
-                    .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
-                    .unwrap_dollar();
-
-                added.push(arg_text);
-                macro_args_to_insert.push((arg_text, arg.1.clone()));
-            }
-
-            for arg in scope_macro_args {
-                let arg_text = env
-                    .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
-                    .unwrap_dollar();
-
-                if !added.contains(&arg_text) {
                     added.push(arg_text);
-                    macro_args_to_insert.push((arg_text, arg.1));
+                    macro_args_to_insert.push((arg_text, arg.1.clone()));
+                }
+
+                for arg in scope_macro_args {
+                    let arg_text = env
+                        .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar();
+
+                    if !added.contains(&arg_text) {
+                        added.push(arg_text);
+                        macro_args_to_insert.push((arg_text, arg.1));
+                    }
                 }
             }
         }
@@ -105,6 +101,36 @@ impl MirLowering for AstScopeDef {
                 scope_data.macro_args.insert(key, value);
             }
         }
+
+        let is_labelled_scope = if self.is_temp
+            && !self.define
+            && let Some(named) = self.named.as_ref()
+            && named.args.is_empty()
+            && let Some(label) = env
+                .resolve(
+                    new_scope,
+                    &named.name,
+                    ResolutionOptions::default().with_dollar(),
+                )
+                .ok()
+                .map(|r| r.unwrap_dollar())
+        {
+            let scope_ref = env.scoping.scope_mut_or_err(new_scope)?;
+            scope_ref
+                .mappings
+                .insert(label, VariableKey::from(label.as_str()));
+
+            env.scoping.scope_stack.push(ScopeContext {
+                label: Some(label),
+                result_target: None,
+                data_type: data_type.clone(),
+                scope_id: new_scope,
+            });
+
+            true
+        } else {
+            false
+        };
 
         if self.is_temp {
             for statement in self.body {
@@ -180,6 +206,10 @@ impl MirLowering for AstScopeDef {
                     .macros
                     .insert(scope_macro.0, scope_macro.1);
             }
+        }
+
+        if is_labelled_scope {
+            env.scoping.scope_stack.pop();
         }
 
         env.context.in_temp_scope = in_temp_scope;

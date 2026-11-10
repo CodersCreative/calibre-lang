@@ -65,7 +65,7 @@ impl MirVarKeysUsed for MiddleNode {
                 data: Some(value), ..
             })
             | MiddleNodeType::Clone(MirClone { value })
-            | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_used(),
+            | MiddleNodeType::Emit(MirEmit { value, .. }) => value.identifiers_used(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::BinaryExpression(MirBinary {
                 left,
@@ -221,7 +221,7 @@ impl MiddleNode {
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
             })
-            | MiddleNodeType::Emit(MirEmit { value }) => {
+            | MiddleNodeType::Emit(MirEmit { value, .. }) => {
                 value.identifiers_declared(include_functions)
             }
 
@@ -387,7 +387,7 @@ impl MiddleNode {
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
             }) => value.identifiers_referenced(include_functions, in_ref),
-            MiddleNodeType::Emit(MirEmit { value }) => {
+            MiddleNodeType::Emit(MirEmit { value, .. }) => {
                 value.identifiers_referenced(include_functions, true)
             }
             MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {

@@ -71,8 +71,51 @@ impl MirLowering for AstEmit {
                 )
                 .lower(env, scope, span, Some(MirDataType::Bool))
             }
-            AstEmit::Scope { label: _, value } => Ok(MiddleNode::new(
+            // TODO Actually finish this
+            AstEmit::Scope {
+                label: Some(label),
+                value,
+            } => {
+                let label = env
+                    .resolve(scope, &label, ResolutionOptions::default().with_dollar())
+                    .ok()
+                    .map(|x| x.unwrap_dollar());
+
+                let target_ctx = if let Some(label) = label {
+                    env.scoping
+                        .scope_stack
+                        .iter()
+                        .rev()
+                        .find(|ctx| ctx.label.as_ref().is_some_and(|x| x == &label))
+                } else {
+                    None
+                };
+
+                if target_ctx.is_none() {
+                    return Err(MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::Scope(label.unwrap_or_default().to_string())),
+                    ));
+                }
+
+                if env.context.type_check {
+                    let data_type = target_ctx.and_then(|ctx| ctx.data_type.clone());
+                    let value_type = value.type_of(env, scope, span);
+
+                    env.compare_types_ref(data_type.as_ref(), value_type.as_ref(), None, span)?;
+                }
+
+                Ok(MiddleNode::new(
+                    MiddleNodeType::Emit(MirEmit {
+                        label,
+                        value: Box::new(value.lower(env, scope, span, data_type)?),
+                    }),
+                    span,
+                ))
+            }
+            AstEmit::Scope { value, .. } => Ok(MiddleNode::new(
                 MiddleNodeType::Emit(MirEmit {
+                    label: None,
                     value: Box::new(value.lower(env, scope, span, data_type)?),
                 }),
                 span,
@@ -748,6 +791,7 @@ impl MirLowering for AstReturn {
                                 body: value
                                     .map(|x| MiddleNode {
                                         node_type: MiddleNodeType::Emit(MirEmit {
+                                            label: None,
                                             value: Box::new(x),
                                         }),
                                         span,
