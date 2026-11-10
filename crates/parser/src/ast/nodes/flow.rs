@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstEmit {
-    Scope(Box<AstNode>),
+    Scope {
+        label: Option<PotentialDollarIdentifier>,
+        value: Box<AstNode>,
+    },
     Channel {
         left: Box<AstNode>,
         right: Box<AstNode>,

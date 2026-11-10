@@ -17,7 +17,9 @@ impl MiddleEnvironment {
             AstNodeType::IfStatement { .. } | AstNodeType::MatchStatement { .. } => {
                 self.resolve_type_from_node(scope, node)
             }
-            AstNodeType::Emit(AstEmit::Scope(x)) => self.resolve_type_from_node(scope, x),
+            AstNodeType::Emit(AstEmit::Scope { value, .. }) => {
+                self.resolve_type_from_node(scope, value)
+            }
             _ => None,
         }
     }

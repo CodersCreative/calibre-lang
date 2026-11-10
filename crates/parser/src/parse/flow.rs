@@ -33,9 +33,14 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     right: Box::new(right),
                     left_channel,
                 }),
-            data.node
-                .clone()
-                .map(|value| AstEmit::Scope(Box::new(value))),
+            just(Token::At)
+                .ignore_then(data.dollar_ident.clone())
+                .or_not()
+                .then(data.node.clone())
+                .map(|(label, value)| AstEmit::Scope {
+                    label,
+                    value: Box::new(value),
+                }),
         )))
     }
 }

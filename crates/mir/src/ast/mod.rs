@@ -663,9 +663,10 @@ impl From<MiddleNode> for AstNode {
 impl From<MiddleNodeType> for AstNodeType {
     fn from(val: MiddleNodeType) -> Self {
         match val {
-            MiddleNodeType::Emit(value) => {
-                AstNodeType::Emit(AstEmit::Scope(Box::new((*value.value).into())))
-            }
+            MiddleNodeType::Emit(value) => AstNodeType::Emit(AstEmit::Scope {
+                value: Box::new((*value.value).into()),
+                label: None,
+            }),
             MiddleNodeType::Spawn(value) => AstNodeType::Spawn(AstSpawn {
                 items: vec![(*value.value).into()],
                 auto_wait: false,

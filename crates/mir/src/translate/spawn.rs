@@ -19,7 +19,7 @@ use calibre_parser::{
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
             declaration::AstDeclaration,
-            flow::{AstBreak, AstEmit},
+            flow::AstBreak,
             functions::{AstFunction, CallArg, FunctionHeader},
             loops::{AstLoop, LoopType},
             memory::AstRef,
@@ -490,12 +490,7 @@ impl MirLowering for AstSpawn {
                     return AstNode::new_temp_scope(vec![
                         decl,
                         loop_node,
-                        AstNode::new(
-                            span,
-                            AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::identifier(
-                                span, ident,
-                            )))),
-                        ),
+                        AstNode::emit(AstNode::identifier(span, ident)),
                     ])
                     .lower(env, scope, span, None);
                 }
@@ -572,10 +567,7 @@ impl MirLowering for AstSpawn {
                 body.push(join_call);
             }
 
-            body.push(AstNode::new(
-                span,
-                AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::identifier(span, ident)))),
-            ));
+            body.push(AstNode::emit(AstNode::identifier(span, ident)));
 
             AstScopeDef {
                 body,

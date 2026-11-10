@@ -16,7 +16,6 @@ const main := fn => {
 	
 	print("2nd loop result = " & val);
 	
-	/* TODO Rework emit to allow breaking from a labelled scope
 	value := => @basic_block {
 		defer print("basic_block defer");
 		if value > 8 => emit @basic_block 100;
@@ -25,7 +24,6 @@ const main := fn => {
 	};
 	
 	print("block result = " & value);
-	*/
 	
 	let mut hit := for x in 0..3 => @outer {
 		defer print("outer defer x=" & x);

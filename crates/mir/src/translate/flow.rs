@@ -71,7 +71,7 @@ impl MirLowering for AstEmit {
                 )
                 .lower(env, scope, span, Some(MirDataType::Bool))
             }
-            AstEmit::Scope(value) => Ok(MiddleNode::new(
+            AstEmit::Scope { label: _, value } => Ok(MiddleNode::new(
                 MiddleNodeType::Emit(MirEmit {
                     value: Box::new(value.lower(env, scope, span, data_type)?),
                 }),
@@ -87,7 +87,7 @@ impl MirLowering for AstEmit {
         span: Span,
     ) -> Option<MirDataType> {
         match self {
-            AstEmit::Scope(x) => x.type_of(env, scope, span),
+            AstEmit::Scope { value, .. } => value.type_of(env, scope, span),
             _ => Some(MirDataType::Bool),
         }
     }

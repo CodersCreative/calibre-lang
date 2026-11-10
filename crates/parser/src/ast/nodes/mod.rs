@@ -235,7 +235,13 @@ impl AstNode {
     }
 
     pub fn emit(node: AstNode) -> Self {
-        Self::new(node.span, AstNodeType::Emit(AstEmit::Scope(Box::new(node))))
+        Self::new(
+            node.span,
+            AstNodeType::Emit(AstEmit::Scope {
+                label: None,
+                value: Box::new(node),
+            }),
+        )
     }
 
     pub fn null(span: Span) -> Self {
@@ -427,7 +433,7 @@ impl AstNode {
                     body: body
                         .into_iter()
                         .map(|x| match x.node_type {
-                            AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
+                            AstNodeType::Emit(AstEmit::Scope { value, label: None }) => AstNode {
                                 node_type: AstNodeType::Return(AstReturn { value: Some(value) }),
                                 span: self.span,
                             },
@@ -443,7 +449,7 @@ impl AstNode {
                 }),
                 span: self.span,
             },
-            AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
+            AstNodeType::Emit(AstEmit::Scope { value, label: None }) => AstNode {
                 node_type: AstNodeType::Return(AstReturn { value: Some(value) }),
                 span: self.span,
             },
@@ -731,9 +737,10 @@ impl Substitutable for AstNodeType {
                 right: Box::new(right.substitute(subst)),
                 left_channel,
             }),
-            Self::Emit(AstEmit::Scope(x)) => {
-                Self::Emit(AstEmit::Scope(Box::new(x.substitute(subst))))
-            }
+            Self::Emit(AstEmit::Scope { value, label }) => Self::Emit(AstEmit::Scope {
+                label,
+                value: Box::new(value.substitute(subst)),
+            }),
             Self::EnumExpression(AstEnum {
                 identifier,
                 value,
