@@ -31,7 +31,7 @@ impl MirLowering for AstScopeDef {
         let in_temp_scope = env.context.in_temp_scope;
         env.context.in_temp_scope = self.is_temp;
 
-        if let Some(named) = self.named {
+        if let Some(named) = self.named.as_ref() {
             let name = env
                 .resolve(
                     scope,
@@ -72,13 +72,13 @@ impl MirLowering for AstScopeDef {
                 scope_macro.args.clone()
             };
 
-            for arg in named.args {
+            for arg in &named.args {
                 let arg_text = env
                     .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
                 added.push(arg_text);
-                macro_args_to_insert.push((arg_text, arg.1));
+                macro_args_to_insert.push((arg_text, arg.1.clone()));
             }
 
             for arg in scope_macro_args {

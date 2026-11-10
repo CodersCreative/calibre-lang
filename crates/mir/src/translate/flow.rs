@@ -16,7 +16,6 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
-            assignment::AstAssignment,
             declaration::AstDeclaration,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
@@ -114,60 +113,52 @@ impl MirLowering for AstBreak {
                         .map(|x| x.unwrap_dollar())
                 });
 
-                let (result_target, broke_target, target_scope, data_type) = {
+                let (result_target, target_scope, data_type) = {
                     let target_ctx = if self.label.is_some() {
                         env.scoping.loop_stack.iter().rev().find(|ctx| {
                             label_text
                                 .as_ref()
-                                .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
+                                .is_some_and(|l| ctx.label.as_ref().is_some_and(|x| x == l))
                         })
                     } else {
                         env.scoping.loop_stack.last()
                     };
+
                     (
                         target_ctx.and_then(|ctx| ctx.result_target),
-                        target_ctx.and_then(|ctx| ctx.broke_target),
                         target_ctx.map(|ctx| ctx.scope_id),
                         target_ctx.and_then(|ctx| ctx.data_type.clone()),
                     )
                 };
 
-                let has_break_value = self.value.is_some();
-                let value_node = self
+                if let Some(break_value) = &self.value {
+                    let expected_type = data_type.clone().map(|x| x.unwrap_one_option());
+                    let value_type = break_value.type_of(env, scope, span);
+
+                    env.compare_types_ref(expected_type.as_ref(), value_type.as_ref(), None, span)?;
+                }
+
+                let value = self
                     .value
                     .map(|v| v.lower_or_empty(env, scope, span, data_type));
 
-                if has_break_value && let Some(result_target) = result_target {
-                    lst.push(
-                        AstNode::new(
+                if value.is_some()
+                    && let Some(result_target) = result_target
+                {
+                    if let Some(val) = value {
+                        let val = AstNode::call(
                             span,
-                            AstNodeType::AssignmentExpression(AstAssignment {
-                                identifier: Box::new(AstNode::identifier(span, result_target)),
-                                value: Box::new(AstNode::null(span)),
-                            }),
-                        )
-                        .lower_or_empty(env, scope, span, None),
-                    );
-                } else if let Some(val) = value_node {
-                    lst.push(val);
-                }
+                            AstNode::identifier(span, "some"),
+                            vec![CallArg::Value(val.into())],
+                        );
 
-                if has_break_value && let Some(broke_target) = broke_target {
-                    lst.push(
-                        AstNode::new(
-                            span,
-                            AstNodeType::AssignmentExpression(AstAssignment {
-                                identifier: Box::new(AstNode::identifier(span, broke_target)),
-                                value: Box::new(AstNode::int(span, "1")),
-                            }),
-                        )
-                        .lower_or_empty(
-                            env,
-                            scope,
-                            span,
-                            Some(MirDataType::Int),
-                        ),
-                    );
+                        lst.push(
+                            AstNode::assign(span, AstNode::identifier(span, result_target), val)
+                                .lower_or_empty(env, scope, span, None),
+                        );
+                    }
+                } else if let Some(val) = value {
+                    lst.push(val);
                 }
 
                 if let Some(target_scope) = target_scope {

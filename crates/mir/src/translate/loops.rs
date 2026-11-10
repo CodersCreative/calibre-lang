@@ -3,7 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{LoopContext, ScopeId},
-    symbols::resolve::ResolutionOptions,
+    symbols::{VariableKey, resolve::ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -77,7 +77,6 @@ fn extract_label_from_named_scope(
 
 struct LoopTempNames {
     result: Option<Ustr>,
-    broke: Option<Ustr>,
     iter: PotentialDollarIdentifier,
     idx: PotentialDollarIdentifier,
     next: PotentialDollarIdentifier,
@@ -85,12 +84,11 @@ struct LoopTempNames {
 
 impl LoopTempNames {
     fn new(env: &mut MiddleEnvironment, span: Span, needs_else: bool) -> Self {
-        let (result, broke) = if needs_else {
+        let result = if needs_else {
             let result = Ustr::from(&env.context.get_temp("loop_result"));
-            let broke = Ustr::from(&env.context.get_temp("loop_broke"));
-            (Some(result), Some(broke))
+            Some(result)
         } else {
-            (None, None)
+            None
         };
 
         let iter = PotentialDollarIdentifier::new(span, env.context.get_temp("loop_iter"));
@@ -99,7 +97,6 @@ impl LoopTempNames {
 
         Self {
             result,
-            broke,
             iter,
             idx,
             next,
@@ -285,7 +282,12 @@ impl MirLowering for AstLoop {
                         None
                     };
 
-                let range_dt = range.type_of(env, scope, span);
+                let range_data_type = range.type_of(env, scope, span);
+                let data_type = self
+                    .else_body
+                    .as_ref()
+                    .and_then(|x| x.type_of(env, scope, span))
+                    .or(data_type.clone());
 
                 let explicit_range = match &range.node_type {
                     AstNodeType::RangeDeclaration(AstRange {
@@ -296,20 +298,22 @@ impl MirLowering for AstLoop {
                     _ => None,
                 };
 
-                let temp_names = LoopTempNames::new(env, span, false);
+                let needs_result_target = self.else_body.is_some();
+                let temp_names = LoopTempNames::new(env, span, needs_result_target);
+
                 let iter_node = AstNode::identifier(span, &temp_names.iter);
                 let idx_node = AstNode::identifier(span, &temp_names.idx);
                 let next_node = AstNode::identifier(span, &temp_names.next);
 
                 let is_count_loop = explicit_range.is_some()
                     || matches!(
-                        range_dt.as_ref().map(|x| x.unwrap_all_refs()),
+                        range_data_type.as_ref().map(|x| x.unwrap_all_refs()),
                         Some(MirDataType::Int) | Some(MirDataType::UInt) | Some(MirDataType::Byte)
                     );
 
                 let is_indexable_loop = is_count_loop
                     || matches!(
-                        range_dt.as_ref().map(|x| x.unwrap_all_refs()),
+                        range_data_type.as_ref().map(|x| x.unwrap_all_refs()),
                         Some(MirDataType::List(_))
                             | Some(MirDataType::Str)
                             | Some(MirDataType::Range)
@@ -402,11 +406,7 @@ impl MirLowering for AstLoop {
                         }),
                     )
                 } else {
-                    AstNode::call(
-                        span,
-                        AstNode::member(span, next_node.clone(), "Some"),
-                        Vec::new(),
-                    )
+                    AstNode::member(span, next_node.clone(), "Some")
                 };
 
                 let var_name_node = AstNode::var_decl(
@@ -444,37 +444,140 @@ impl MirLowering for AstLoop {
                     inner_instructions.push(AstNode::assign(span, target, iter_node.clone()));
                 }
 
-                let core_loop = AstNode::new(
-                    span,
-                    AstNodeType::LoopDeclaration(AstLoop {
-                        loop_type: Box::new(LoopType::Loop),
-                        body: Box::new(AstNode::new_temp_scope(inner_instructions)),
-                        label: self.label,
-                        until: None,
-                        else_body: self.else_body,
-                    }),
-                );
+                if let Some(else_body) = self.else_body.take() {
+                    let result_ident = ParserText::from(
+                        temp_names
+                            .result
+                            .expect("loop result name not generated but required"),
+                    );
 
-                pre_nodes.push(core_loop);
-                let temp_scope = AstNode::new_temp_scope(pre_nodes);
+                    let result_type = data_type
+                        .clone()
+                        .map(|t| {
+                            ParserDataType::new(span, ParserInnerType::Option(Box::new(t.into())))
+                        })
+                        .unwrap_or(ParserDataType::auto(span));
 
-                env.scoping.loop_stack.push(LoopContext {
-                    label: None,
-                    result_target: None,
-                    broke_target: None,
-                    continue_inject: if is_indexable_loop {
-                        Some(increment_node)
-                    } else {
-                        None
-                    },
-                    data_type,
-                    scope_id: scope,
-                });
+                    let result_decl = AstNode::var_decl(
+                        span,
+                        result_ident.clone().into(),
+                        VarType::Mutable,
+                        AstNode::none(span),
+                        result_type,
+                    );
 
-                let out = temp_scope.lower(env, scope, span, None);
-                env.scoping.loop_stack.pop();
+                    let mut scope_block = vec![result_decl];
+                    scope_block.extend(pre_nodes);
 
-                out
+                    let label = self.label.as_ref().and_then(|l| {
+                        env.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                            .ok()
+                            .map(|x| x.unwrap_dollar())
+                    });
+
+                    if let Some(label) = label {
+                        let scope_data = env.scoping.scope_mut_or_err(scope)?;
+                        scope_data
+                            .mappings
+                            .insert(label, VariableKey::from(label.as_str()));
+                    }
+
+                    scope_block.push(AstNode::new(
+                        span,
+                        AstNodeType::LoopDeclaration(AstLoop {
+                            loop_type: Box::new(LoopType::Loop),
+                            body: Box::new(AstNode::new_temp_scope(inner_instructions)),
+                            label: self.label,
+                            until: None,
+                            else_body: None,
+                        }),
+                    ));
+
+                    scope_block.push(AstNode::emit(AstNode::new(
+                        span,
+                        AstNodeType::IfStatement(AstIf {
+                            comparison: Box::new(IfComparisonType::If(AstNode::call(
+                                span,
+                                AstNode::member(
+                                    span,
+                                    AstNode::identifier(span, result_ident.clone()),
+                                    AstNode::identifier(span, "is_some"),
+                                ),
+                                Vec::new(),
+                            ))),
+                            then: Box::new(AstNode::new_temp_scope(vec![AstNode::emit(
+                                AstNode::member(
+                                    span,
+                                    AstNode::identifier(span, result_ident),
+                                    "Some",
+                                ),
+                            )])),
+                            otherwise: Some(else_body),
+                        }),
+                    )));
+
+                    let scope_block = AstNode::new_temp_scope(scope_block);
+
+                    env.scoping.loop_stack.push(LoopContext {
+                        label,
+                        result_target: temp_names.result,
+                        continue_inject: if is_indexable_loop {
+                            Some(increment_node.clone())
+                        } else {
+                            None
+                        },
+                        data_type: data_type.map(|t| MirDataType::Option(Box::new(t))),
+                        scope_id: scope,
+                    });
+
+                    let out = scope_block.lower(env, scope, span, None);
+                    env.scoping.loop_stack.pop();
+
+                    out
+                } else {
+                    let label = self.label.as_ref().and_then(|l| {
+                        env.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                            .ok()
+                            .map(|x| x.unwrap_dollar())
+                    });
+
+                    if let Some(label) = label {
+                        let scope_data = env.scoping.scope_mut_or_err(scope)?;
+                        scope_data
+                            .mappings
+                            .insert(label, VariableKey::from(label.as_str()));
+                    }
+
+                    pre_nodes.push(AstNode::new(
+                        span,
+                        AstNodeType::LoopDeclaration(AstLoop {
+                            loop_type: Box::new(LoopType::Loop),
+                            body: Box::new(AstNode::new_temp_scope(inner_instructions)),
+                            label: self.label,
+                            until: None,
+                            else_body: None,
+                        }),
+                    ));
+
+                    let scope_block = AstNode::new_temp_scope(pre_nodes);
+
+                    env.scoping.loop_stack.push(LoopContext {
+                        label,
+                        result_target: None,
+                        continue_inject: if is_indexable_loop {
+                            Some(increment_node)
+                        } else {
+                            None
+                        },
+                        data_type,
+                        scope_id: scope,
+                    });
+
+                    let out = scope_block.lower(env, scope, span, None);
+                    env.scoping.loop_stack.pop();
+
+                    out
+                }
             }
 
             LoopType::Loop => {
@@ -484,52 +587,85 @@ impl MirLowering for AstLoop {
                     .last()
                     .and_then(|c| c.continue_inject.clone());
 
+                let label = self.label.as_ref().and_then(|l| {
+                    env.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                        .ok()
+                        .map(|x| x.unwrap_dollar())
+                });
+
+                if let Some(label) = label {
+                    let scope_data = env.scoping.scope_mut_or_err(scope)?;
+                    scope_data
+                        .mappings
+                        .insert(label, VariableKey::from(label.as_str()));
+                }
+
                 if let Some(else_body) = self.else_body.take() {
                     let temp_names = LoopTempNames::new(env, span, true);
+
                     let result_ident = ParserText::from(
                         temp_names
                             .result
                             .expect("loop result name not generated but required"),
                     );
-                    let broke_ident = ParserText::from(
-                        temp_names
-                            .broke
-                            .expect("loop result name not generated but required"),
-                    );
+
+                    let data_type = self
+                        .else_body
+                        .as_ref()
+                        .and_then(|x| x.type_of(env, scope, span))
+                        .or(data_type.clone());
+
+                    let result_type = data_type
+                        .clone()
+                        .map(|t| {
+                            ParserDataType::new(span, ParserInnerType::Option(Box::new(t.into())))
+                        })
+                        .unwrap_or(ParserDataType::auto(span));
 
                     let result_decl = AstNode::var_decl(
                         span,
                         result_ident.clone().into(),
                         VarType::Mutable,
-                        *else_body,
-                        data_type
-                            .clone()
-                            .map(|x| x.into())
-                            .unwrap_or(ParserDataType::auto(span)),
+                        AstNode::none(span),
+                        result_type,
                     );
 
-                    let broke_decl = AstNode::var_decl(
-                        span,
-                        broke_ident.clone().into(),
-                        VarType::Mutable,
-                        AstNode::int(span, 0),
-                        ParserDataType::new(span, ParserInnerType::Int),
-                    );
-
-                    let mut scope_block = vec![result_decl, broke_decl];
+                    let mut scope_block = vec![result_decl];
                     scope_block.push(AstNode::new(span, AstNodeType::LoopDeclaration(self)));
-                    scope_block.push(AstNode::identifier(span, result_ident));
+
+                    scope_block.push(AstNode::emit(AstNode::new(
+                        span,
+                        AstNodeType::IfStatement(AstIf {
+                            comparison: Box::new(IfComparisonType::If(AstNode::call(
+                                span,
+                                AstNode::member(
+                                    span,
+                                    AstNode::identifier(span, result_ident.clone()),
+                                    AstNode::identifier(span, "is_some"),
+                                ),
+                                Vec::new(),
+                            ))),
+                            then: Box::new(AstNode::new_temp_scope(vec![AstNode::emit(
+                                AstNode::member(
+                                    span,
+                                    AstNode::identifier(span, result_ident),
+                                    "Some",
+                                ),
+                            )])),
+                            otherwise: Some(else_body),
+                        }),
+                    )));
 
                     let temp_scope = AstNode::new_temp_scope(scope_block);
 
                     env.scoping.loop_stack.push(LoopContext {
-                        label: None,
+                        label,
                         result_target: temp_names.result,
-                        broke_target: temp_names.broke,
                         continue_inject: injected_continue,
-                        data_type,
+                        data_type: data_type.map(|t| MirDataType::Option(Box::new(t))),
                         scope_id: scope,
                     });
+
                     let out = temp_scope.lower(env, scope, span, None);
                     env.scoping.loop_stack.pop();
 
@@ -537,42 +673,49 @@ impl MirLowering for AstLoop {
                 }
 
                 let inner_scope = env.scoping.new_scope_from_parent_shallow(scope);
-                let label_text = self.label.as_ref().and_then(|l| {
+
+                let label = self.label.as_ref().and_then(|l| {
                     env.resolve(inner_scope, l, ResolutionOptions::default().with_dollar())
                         .ok()
                         .map(|x| x.unwrap_dollar())
                 });
 
-                let (result_target, broke_target, cont_inj) =
+                if let Some(label) = label {
+                    let scope_data = env.scoping.scope_mut_or_err(inner_scope)?;
+                    scope_data
+                        .mappings
+                        .insert(label, VariableKey::from(label.as_str()));
+                }
+
+                let (result_target, continue_inject) =
                     if let Some(ctx) = env.scoping.loop_stack.last() {
-                        (
-                            ctx.result_target,
-                            ctx.broke_target,
-                            ctx.continue_inject.clone(),
-                        )
+                        (ctx.result_target, ctx.continue_inject.clone())
                     } else {
-                        (None, None, None)
+                        (None, None)
                     };
 
+                let data_type = self
+                    .else_body
+                    .as_ref()
+                    .and_then(|x| x.type_of(env, inner_scope, span))
+                    .or(data_type.clone());
+
                 env.scoping.loop_stack.push(LoopContext {
-                    label: label_text,
+                    label,
                     result_target,
-                    broke_target,
-                    continue_inject: cont_inj,
+                    continue_inject,
                     scope_id: inner_scope,
                     data_type,
                 });
 
-                let body_span = self.body.span;
-                let body = self.body.lower(env, inner_scope, body_span, None)?;
-
+                let body = self.body.lower(env, inner_scope, span, None)?;
                 env.scoping.loop_stack.pop();
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         body: Box::new(body),
                         scope_id: inner_scope,
-                        label: label_text,
+                        label,
                     }),
                     span,
                 })
