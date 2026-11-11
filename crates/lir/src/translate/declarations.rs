@@ -7,8 +7,8 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirClone, LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType},
-    environment::{LirEnvironment, LirFunction, LirGlobal},
+    ast::{LirClone, LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType, LirTerminator},
+    environment::{LabelContext, LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
 use calibre_mir::{
@@ -55,22 +55,73 @@ impl LirLowering for MirVarDecl {
 
 impl LirLowering for MirScopeDecl {
     #[inline(always)]
-    fn lower<'a>(mut self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+    fn lower<'a>(mut self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
         if self.function_body || (!env.allow_global_hoist && !self.is_temp) {
+            if let Some(label) = self.label {
+                let exit_id = env.create_block();
+                env.label_stack.push(LabelContext {
+                    header: None,
+                    exit: exit_id,
+                    label: Some(label),
+                    is_loop: false,
+                });
+            }
+
             env.lower_scope_items(self.body);
+
+            if self.label.is_some() {
+                let ctx = env.label_stack.pop();
+                if let Some(ctx) = ctx {
+                    env.switch_to(ctx.exit);
+                }
+            }
+
             return LirNodeType::null();
         } else if self.is_temp {
             let body = std::mem::take(&mut self.body);
             let mut body = body.into_vec();
             let last = body.pop();
 
+            if let Some(label) = self.label {
+                let exit_id = env.create_block();
+                env.label_stack.push(LabelContext {
+                    header: None,
+                    exit: exit_id,
+                    label: Some(label),
+                    is_loop: false,
+                });
+            }
+
             env.lower_scope_items(body);
 
             let Some(last) = last else {
+                if self.label.is_some() {
+                    let ctx = env.label_stack.pop();
+                    if let Some(ctx) = ctx {
+                        env.switch_to(ctx.exit);
+                    }
+                }
+
                 return LirNodeType::null();
             };
 
-            return env.lower_node(last.clone());
+            let result = env.lower_node(last.clone());
+
+            if self.label.is_some() {
+                let ctx = env.label_stack.pop();
+                if let Some(ctx) = ctx {
+                    if env.current_block_open() {
+                        env.set_terminator(LirTerminator::Jump {
+                            span,
+                            target: ctx.exit,
+                        });
+                    }
+
+                    env.switch_to(ctx.exit);
+                }
+            }
+
+            return result;
         }
 
         for stmt in self.body {
