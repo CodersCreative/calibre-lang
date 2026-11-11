@@ -137,6 +137,14 @@ impl Display for LirFunction {
 }
 
 #[derive(Debug, Clone)]
+pub struct LabelContext {
+    pub header: Option<BlockId>,
+    pub exit: BlockId,
+    pub label: Option<Ustr>,
+    pub is_loop: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct LirEnvironment<'a> {
     pub env: &'a MiddleEnvironment,
     pub last_ident: Option<VariableKey>,
@@ -144,7 +152,7 @@ pub struct LirEnvironment<'a> {
     pub blocks: Vec<LirBlock>,
     pub current_block: BlockId,
     pub referenced_identifiers: FxHashSet<VariableKey>,
-    pub loop_stack: Vec<(BlockId, BlockId, Option<Ustr>)>,
+    pub label_stack: Vec<LabelContext>,
     pub allow_global_hoist: bool,
     pub counter: usize,
 }
@@ -201,7 +209,7 @@ impl<'a> LirEnvironment<'a> {
             }],
             current_block: entry_id,
             referenced_identifiers: FxHashSet::default(),
-            loop_stack: Vec::new(),
+            label_stack: Vec::new(),
             allow_global_hoist,
             counter: count,
         }
@@ -228,17 +236,34 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    pub fn find_loop_target(&self, label: Option<&Ustr>, use_exit: bool) -> Option<BlockId> {
-        let labeled = label.and_then(|lbl| {
-            self.loop_stack
-                .iter()
-                .rev()
-                .find(|(_, _, l)| l.as_deref() == Some(lbl))
+    pub fn find_label_target(
+        &self,
+        label: Option<&Ustr>,
+        is_loop: bool,
+        use_exit: bool,
+    ) -> Option<BlockId> {
+        let labeled = label.and_then(|label| {
+            self.label_stack.iter().rev().find(|context| {
+                context.is_loop == is_loop && context.label.as_ref().is_some_and(|x| x == label)
+            })
         });
 
         labeled
-            .or_else(|| self.loop_stack.last())
-            .map(|(header, exit, _)| if use_exit { *exit } else { *header })
+            .or_else(|| {
+                self.label_stack
+                    .iter()
+                    .rev()
+                    .find(|context| context.is_loop == is_loop)
+            })
+            .map(|context| {
+                if let Some(header) = context.header
+                    && !use_exit
+                {
+                    header
+                } else {
+                    context.exit
+                }
+            })
     }
 
     pub fn add_instr(&mut self, instr: LirNode) {

@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirBreak, MirContinue, MirEmit, MirReturn, MirScopeDecl,
-        types::MirDataType,
+        MiddleNode, MiddleNodeType, MirBreak, MirContinue, MirEmit, MirMove, MirReturn,
+        MirScopeDecl, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -23,6 +23,7 @@ use calibre_parser::{
             },
             functions::CallArg,
             matching::{AstMatch, MatchArmType, MatchBody},
+            memory::AstMove,
             scopes::AstScopeDef,
         },
         types::ParserDataType,
@@ -71,55 +72,169 @@ impl MirLowering for AstEmit {
                 )
                 .lower(env, scope, span, Some(MirDataType::Bool))
             }
-            // TODO Actually finish this
-            AstEmit::Scope {
-                label: Some(label),
-                value,
-            } => {
-                let label = env
-                    .resolve(scope, &label, ResolutionOptions::default().with_dollar())
-                    .ok()
+            AstEmit::Scope { value, label } => {
+                let mut label = label
+                    .and_then(|label| {
+                        env.resolve(scope, &label, ResolutionOptions::default().with_dollar())
+                            .ok()
+                    })
                     .map(|x| x.unwrap_dollar());
 
-                let target_ctx = if let Some(label) = label {
-                    env.scoping
-                        .scope_stack
-                        .iter()
-                        .rev()
-                        .find(|ctx| ctx.label.as_ref().is_some_and(|x| x == &label))
+                let (target_scope, result_target, is_function_body) = if let Some(x) = label
+                    .and_then(|label| {
+                        env.scoping
+                            .scope_stack
+                            .iter()
+                            .rev()
+                            .find(|ctx| ctx.label.as_ref().is_some_and(|x| x == &label))
+                    })
+                    .or_else(|| env.scoping.scope_stack.last())
+                {
+                    label = label.or(x.label);
+
+                    (Some(x.scope_id), x.result_target, x.is_function_body)
                 } else {
-                    None
+                    (None, None, false)
                 };
 
-                if target_ctx.is_none() {
-                    return Err(MiddleErr::At(
+                let mut lst = Vec::new();
+
+                if let Some(target_scope) = target_scope {
+                    let chain_defers = env.scoping.collect_defers_until(scope, Some(target_scope));
+
+                    for x in chain_defers {
+                        lst.push(x.lower_or_empty(env, scope, span, None));
+                    }
+                } else if let Ok(s) = env.scoping.scope_or_err(scope) {
+                    for x in s.defers.clone() {
+                        lst.push(x.lower_or_empty(env, scope, span, None));
+                    }
+                }
+
+                if is_function_body {
+                    for x in env.symbols.function_defers.clone() {
+                        let span = x.span;
+                        lst.extend(
+                            x.lower_or_empty(env, scope, span, None)
+                                .nodes_if_no_new_scope(),
+                        );
+                    }
+                }
+
+                if lst.is_empty() && result_target.is_none() {
+                    Ok(MiddleNode {
+                        node_type: MiddleNodeType::Emit(MirEmit {
+                            value: Box::new(value.lower(env, scope, span, data_type)?),
+                        }),
                         span,
-                        Box::new(MiddleErr::Scope(label.unwrap_or_default().to_string())),
-                    ));
+                    })
+                } else {
+                    let identifier = {
+                        let value_ident = env.context.get_temp("emit_value");
+                        let data_type = data_type.or_else(|| value.type_of(env, scope, span));
+
+                        let value_key = env.register_variable(
+                            scope,
+                            Ustr::from(&value_ident),
+                            data_type.clone().expect("Failed to get data type"),
+                            VarType::Immutable,
+                        )?;
+
+                        lst.insert(
+                            0,
+                            AstNode::new(
+                                span,
+                                AstNodeType::VariableDeclaration(AstDeclaration {
+                                    var_type: VarType::Immutable,
+                                    identifier: PotentialDollarIdentifier::new(span, value_ident),
+                                    value,
+                                    data_type: data_type
+                                        .clone()
+                                        .map(ParserDataType::from)
+                                        .unwrap_or(ParserDataType::auto(span)),
+                                    declared: true,
+                                }),
+                            )
+                            .lower_or_empty(env, scope, span, data_type),
+                        );
+
+                        value_key
+                    };
+
+                    let mut assigned_result = false;
+
+                    let value = MiddleNode::new(
+                        MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                            body: lst
+                                .into_iter()
+                                .chain(std::iter::once(
+                                    if let Some(target) = result_target.as_ref() {
+                                        assigned_result = true;
+                                        AstNode::assign(
+                                            span,
+                                            AstNode::identifier(span, target),
+                                            AstNode::call(
+                                                span,
+                                                AstNode::identifier(span, "some"),
+                                                vec![CallArg::Value(AstNode {
+                                                    node_type: AstNodeType::MoveExpression(
+                                                        AstMove {
+                                                            value: Box::new(AstNode::identifier(
+                                                                span,
+                                                                identifier.name(),
+                                                            )),
+                                                        },
+                                                    ),
+                                                    span,
+                                                })],
+                                            ),
+                                        )
+                                        .lower_or_empty(env, scope, span, None)
+                                    } else {
+                                        MiddleNode {
+                                            node_type: MiddleNodeType::Emit(MirEmit {
+                                                value: Box::new(MiddleNode {
+                                                    node_type: MiddleNodeType::Move(MirMove {
+                                                        identifier,
+                                                    }),
+                                                    span,
+                                                }),
+                                            }),
+                                            span,
+                                        }
+                                    },
+                                ))
+                                .chain(assigned_result.then(|| {
+                                    MiddleNode::new(
+                                        MiddleNodeType::Break(MirBreak {
+                                            to_loop: false,
+                                            label,
+                                        }),
+                                        span,
+                                    )
+                                }))
+                                .collect(),
+                            label: None,
+                            create_new_scope: false,
+                            is_temp: true,
+                            function_body: false,
+                            scope_id: scope,
+                        }),
+                        span,
+                    );
+
+                    if assigned_result {
+                        Ok(value)
+                    } else {
+                        Ok(MiddleNode {
+                            node_type: MiddleNodeType::Emit(MirEmit {
+                                value: Box::new(value),
+                            }),
+                            span,
+                        })
+                    }
                 }
-
-                if env.context.type_check {
-                    let data_type = target_ctx.and_then(|ctx| ctx.data_type.clone());
-                    let value_type = value.type_of(env, scope, span);
-
-                    env.compare_types_ref(data_type.as_ref(), value_type.as_ref(), None, span)?;
-                }
-
-                Ok(MiddleNode::new(
-                    MiddleNodeType::Emit(MirEmit {
-                        label,
-                        value: Box::new(value.lower(env, scope, span, data_type)?),
-                    }),
-                    span,
-                ))
             }
-            AstEmit::Scope { value, .. } => Ok(MiddleNode::new(
-                MiddleNodeType::Emit(MirEmit {
-                    label: None,
-                    value: Box::new(value.lower(env, scope, span, data_type)?),
-                }),
-                span,
-            )),
         }
     }
 
@@ -150,7 +265,7 @@ impl MirLowering for AstBreak {
             node_type: {
                 let mut lst = Vec::new();
 
-                let label_text = self.label.as_ref().and_then(|l| {
+                let mut label = self.label.as_ref().and_then(|l| {
                     env.resolve(scope, l, ResolutionOptions::default().with_dollar())
                         .ok()
                         .map(|x| x.unwrap_dollar())
@@ -159,13 +274,15 @@ impl MirLowering for AstBreak {
                 let (result_target, target_scope, data_type) = {
                     let target_ctx = if self.label.is_some() {
                         env.scoping.loop_stack.iter().rev().find(|ctx| {
-                            label_text
+                            label
                                 .as_ref()
                                 .is_some_and(|l| ctx.label.as_ref().is_some_and(|x| x == l))
                         })
                     } else {
                         env.scoping.loop_stack.last()
                     };
+
+                    label = label.or_else(|| target_ctx.and_then(|x| x.label));
 
                     (
                         target_ctx.and_then(|ctx| ctx.result_target),
@@ -187,21 +304,18 @@ impl MirLowering for AstBreak {
 
                 if value.is_some()
                     && let Some(result_target) = result_target
+                    && let Some(value) = value
                 {
-                    if let Some(val) = value {
-                        let val = AstNode::call(
-                            span,
-                            AstNode::identifier(span, "some"),
-                            vec![CallArg::Value(val.into())],
-                        );
+                    let value = AstNode::call(
+                        span,
+                        AstNode::identifier(span, "some"),
+                        vec![CallArg::Value(value.into())],
+                    );
 
-                        lst.push(
-                            AstNode::assign(span, AstNode::identifier(span, result_target), val)
-                                .lower_or_empty(env, scope, span, None),
-                        );
-                    }
-                } else if let Some(val) = value {
-                    lst.push(val);
+                    lst.push(
+                        AstNode::assign(span, AstNode::identifier(span, result_target), value)
+                            .lower_or_empty(env, scope, span, None),
+                    );
                 }
 
                 if let Some(target_scope) = target_scope {
@@ -218,8 +332,8 @@ impl MirLowering for AstBreak {
 
                 let break_node = MiddleNode::new(
                     MiddleNodeType::Break(MirBreak {
-                        label: label_text,
-                        value: None,
+                        to_loop: true,
+                        label,
                     }),
                     span,
                 );
@@ -232,6 +346,7 @@ impl MirLowering for AstBreak {
 
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: lst.into_boxed_slice(),
+                    label: None,
                     create_new_scope: false,
                     function_body: false,
                     is_temp: true,
@@ -682,6 +797,7 @@ impl MirLowering for AstContinue {
 
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: lst.into_boxed_slice(),
+                    label: None,
                     create_new_scope: false,
                     is_temp: true,
                     function_body: false,
@@ -771,11 +887,7 @@ impl MirLowering for AstReturn {
                         }
                     }
 
-                    let value = self
-                        .value
-                        .map(|x| x.lower_or_empty(env, scope, span, data_type));
-
-                    let lst: Vec<MiddleNode> = env
+                    let mut lst: Vec<MiddleNode> = env
                         .scoping
                         .collect_defers_until(scope, None)
                         .into_iter()
@@ -784,21 +896,65 @@ impl MirLowering for AstReturn {
                         .collect();
 
                     if lst.is_empty() {
-                        value.map(Box::new)
+                        self.value
+                            .map(|x| x.lower_or_empty(env, scope, span, data_type))
+                            .map(Box::new)
                     } else {
+                        let value = if let Some(value) = self.value {
+                            let value_ident = env.context.get_temp("return_value");
+                            data_type = data_type.or_else(|| value.type_of(env, scope, span));
+
+                            let value_key = env.register_variable(
+                                scope,
+                                Ustr::from(&value_ident),
+                                data_type.clone().expect("Failed to get data type"),
+                                VarType::Immutable,
+                            )?;
+
+                            lst.insert(
+                                0,
+                                AstNode::new(
+                                    span,
+                                    AstNodeType::VariableDeclaration(AstDeclaration {
+                                        var_type: VarType::Immutable,
+                                        identifier: PotentialDollarIdentifier::new(
+                                            span,
+                                            value_ident,
+                                        ),
+                                        value,
+                                        data_type: data_type
+                                            .clone()
+                                            .map(ParserDataType::from)
+                                            .unwrap_or(ParserDataType::auto(span)),
+                                        declared: true,
+                                    }),
+                                )
+                                .lower_or_empty(env, scope, span, data_type),
+                            );
+
+                            Some(value_key)
+                        } else {
+                            None
+                        };
+
                         Some(Box::new(MiddleNode::new(
                             MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                                 body: value
-                                    .map(|x| MiddleNode {
+                                    .map(|identifier| MiddleNode {
                                         node_type: MiddleNodeType::Emit(MirEmit {
-                                            label: None,
-                                            value: Box::new(x),
+                                            value: Box::new(MiddleNode {
+                                                node_type: MiddleNodeType::Move(MirMove {
+                                                    identifier,
+                                                }),
+                                                span,
+                                            }),
                                         }),
                                         span,
                                     })
                                     .into_iter()
                                     .chain(lst.into_iter())
                                     .collect(),
+                                label: None,
                                 create_new_scope: false,
                                 is_temp: true,
                                 function_body: false,

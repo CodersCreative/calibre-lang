@@ -67,6 +67,7 @@ impl MiddleEnvironment {
                                 create_new_scope: false,
                                 is_temp: false,
                                 function_body: false,
+                                label: None,
                                 scope_id,
                             }),
                             span,
@@ -283,6 +284,7 @@ impl MiddleEnvironment {
                                 .chain(body.into_iter())
                                 .collect()
                         },
+                        label: None,
                         create_new_scope: true,
                         is_temp: false,
                         function_body: false,
@@ -294,6 +296,7 @@ impl MiddleEnvironment {
             (_, Some(build_node)) => MiddleNode::new(
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: Box::new([middle, build_node]),
+                    label: None,
                     create_new_scope: false,
                     is_temp: false,
                     function_body: false,

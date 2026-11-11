@@ -4,7 +4,10 @@ use calibre_parser::{
         ObjectMap, ObjectType, RefMutability,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
+        idents::{
+            IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier,
+            PotentialGenericTypeIdentifier,
+        },
         nodes::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIdentifier, AstIndex},
@@ -20,7 +23,7 @@ use calibre_parser::{
             },
             loops::{AstLoop, LoopType},
             memory::{AstClone, AstDeref, AstDrop, AstMove, AstRef},
-            scopes::AstScopeDef,
+            scopes::{AstScopeDef, NamedScope},
             spawn::AstSpawn,
             unary::AstNot,
         },
@@ -314,8 +317,8 @@ impl MiddleNode {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirBreak {
+    pub to_loop: bool,
     pub label: Option<Ustr>,
-    pub value: Option<Box<MiddleNode>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -458,7 +461,6 @@ pub struct MirReturn {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirEmit {
-    pub label: Option<Ustr>,
     pub value: Box<MiddleNode>,
 }
 
@@ -516,6 +518,7 @@ pub struct MirVarDecl {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirScopeDecl {
+    pub label: Option<Ustr>,
     pub body: Box<[MiddleNode]>,
     pub scope_id: ScopeId,
     pub create_new_scope: bool,
@@ -688,7 +691,7 @@ impl From<MiddleNodeType> for AstNodeType {
             }),
             MiddleNodeType::Break(value) => AstNodeType::Break(AstBreak {
                 label: value.label.map(Into::into),
-                value: value.value.map(|v| Box::new((*v).into())),
+                value: None,
             }),
             MiddleNodeType::Continue(value) => AstNodeType::Continue(AstContinue {
                 label: value.label.map(Into::into),
@@ -728,7 +731,11 @@ impl From<MiddleNodeType> for AstNodeType {
 
                     lst
                 },
-                named: None,
+                named: value.label.map(|x| NamedScope {
+                    name: PotentialDollarIdentifier::new(Span::default(), x),
+                    used_by_loop: false,
+                    args: Vec::new(),
+                }),
                 is_temp: value.is_temp,
                 create_new_scope: value.create_new_scope,
                 define: false,

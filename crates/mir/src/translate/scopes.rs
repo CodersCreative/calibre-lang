@@ -11,7 +11,11 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::nodes::{AstNode, scopes::AstScopeDef},
+    ast::{
+        idents::PotentialDollarIdentifier,
+        nodes::{AstNode, VarType, scopes::AstScopeDef},
+        types::{ParserDataType, ParserInnerType},
+    },
 };
 use tracing::instrument;
 use ustr::Ustr;
@@ -23,9 +27,8 @@ impl MirLowering for AstScopeDef {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        data_type: Option<MirDataType>,
+        mut data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let mut stmts = Vec::new();
         let mut macro_args_to_insert: Vec<(Ustr, AstNode)> = Vec::new();
 
         let in_temp_scope = env.context.in_temp_scope;
@@ -89,6 +92,8 @@ impl MirLowering for AstScopeDef {
             }
         }
 
+        data_type = data_type.or_else(|| self.type_of(env, scope, span));
+
         let new_scope = if self.create_new_scope && !self.define {
             env.scoping.new_scope_from_parent_shallow(scope)
         } else {
@@ -102,10 +107,12 @@ impl MirLowering for AstScopeDef {
             }
         }
 
-        let is_labelled_scope = if self.is_temp
+        let mut result_target_decl = None;
+
+        let label = if self.is_temp
             && !self.define
             && let Some(named) = self.named.as_ref()
-            && named.args.is_empty()
+            && !named.used_by_loop
             && let Some(label) = env
                 .resolve(
                     new_scope,
@@ -120,19 +127,49 @@ impl MirLowering for AstScopeDef {
                 .mappings
                 .insert(label, VariableKey::from(label.as_str()));
 
+            let result_target = Ustr::from(&env.context.get_temp("scope_result"));
+
             env.scoping.scope_stack.push(ScopeContext {
                 label: Some(label),
+                result_target: Some(result_target),
+                data_type: data_type.clone(),
+                is_function_body: self.is_function_body,
+                scope_id: new_scope,
+            });
+
+            let data_type = data_type
+                .clone()
+                .map(|t| ParserDataType::new(span, ParserInnerType::Option(Box::new(t.into()))))
+                .unwrap_or(ParserDataType::auto(span));
+
+            result_target_decl = Some(
+                AstNode::var_decl(
+                    span,
+                    PotentialDollarIdentifier::new(span, result_target),
+                    VarType::Mutable,
+                    AstNode::none(span),
+                    data_type,
+                )
+                .lower_or_empty(env, scope, span, None),
+            );
+
+            Some(label)
+        } else {
+            env.scoping.scope_stack.push(ScopeContext {
+                label: None,
                 result_target: None,
+                is_function_body: self.is_function_body,
                 data_type: data_type.clone(),
                 scope_id: new_scope,
             });
 
-            true
-        } else {
-            false
+            None
         };
 
+        let mut stmts = Vec::new();
+
         if self.is_temp {
+            let no_defers = self.body.last().is_some_and(|x| x.is_emit());
             for statement in self.body {
                 let span = statement.span;
                 let is_emit = statement.is_emit();
@@ -148,21 +185,23 @@ impl MirLowering for AstScopeDef {
                 );
             }
 
-            for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
-                let span = x.span;
-                stmts.extend(
-                    x.lower_or_empty(env, new_scope, span, None)
-                        .nodes_if_no_new_scope(),
-                );
-            }
-
-            if self.is_function_body {
-                for x in env.symbols.function_defers.clone() {
+            if !no_defers {
+                for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
                     let span = x.span;
                     stmts.extend(
                         x.lower_or_empty(env, new_scope, span, None)
                             .nodes_if_no_new_scope(),
                     );
+                }
+
+                if self.is_function_body {
+                    for x in env.symbols.function_defers.clone() {
+                        let span = x.span;
+                        stmts.extend(
+                            x.lower_or_empty(env, new_scope, span, None)
+                                .nodes_if_no_new_scope(),
+                        );
+                    }
                 }
             }
         } else {
@@ -208,14 +247,18 @@ impl MirLowering for AstScopeDef {
             }
         }
 
-        if is_labelled_scope {
-            env.scoping.scope_stack.pop();
-        }
+        let result_target = env.scoping.scope_stack.pop().and_then(|x| x.result_target);
+
+        let result_target = result_target.map(|x| {
+            AstNode::emit(AstNode::member(span, AstNode::identifier(span, x), "Some"))
+                .lower_or_empty(env, scope, span, data_type)
+        });
 
         env.context.in_temp_scope = in_temp_scope;
 
-        Ok(MiddleNode {
+        let stmts = MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                label,
                 body: {
                     stmts
                         .into_iter()
@@ -228,7 +271,23 @@ impl MirLowering for AstScopeDef {
                 function_body: false,
             }),
             span,
-        })
+        };
+
+        if let (Some(decl), Some(access)) = (result_target_decl.clone(), result_target.clone()) {
+            Ok(MiddleNode {
+                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    label: None,
+                    body: Box::new([decl, stmts, access]),
+                    scope_id: scope,
+                    create_new_scope: false,
+                    is_temp: self.is_temp,
+                    function_body: false,
+                }),
+                span,
+            })
+        } else {
+            Ok(stmts)
+        }
     }
 
     fn type_of(
@@ -261,7 +320,7 @@ impl MirLowering for AstScopeDef {
         {
             node.type_of(env, scope, span)
         } else {
-            unreachable!()
+            None
         }
     }
 }

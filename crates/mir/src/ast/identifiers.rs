@@ -2,9 +2,9 @@ use crate::{
     MirVarKeysUsed,
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
-        MirBreak, MirCall, MirClone, MirComparison, MirConditional, MirDeref, MirDiscriminant,
-        MirDrop, MirEmit, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList,
-        MirLoop, MirMove, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+        MirCall, MirClone, MirComparison, MirConditional, MirDeref, MirDiscriminant, MirDrop,
+        MirEmit, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop,
+        MirMove, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
     symbols::VariableKey,
 };
@@ -14,7 +14,7 @@ impl MirVarKeysUsed for MiddleNode {
     /// I should probably mention that this INCLUDES identifiers used in closures within this function.
     fn identifiers_used(&self) -> Vec<&VariableKey> {
         match &self.node_type {
-            MiddleNodeType::Break(MirBreak { value: None, .. })
+            MiddleNodeType::Break(_)
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Continue { .. }
             | MiddleNodeType::Null
@@ -37,9 +37,6 @@ impl MirVarKeysUsed for MiddleNode {
             MiddleNodeType::RefStatement(MirRef {
                 mutability: _,
                 value,
-            })
-            | MiddleNodeType::Break(MirBreak {
-                value: Some(value), ..
             })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::Spawn(MirSpawn { value })

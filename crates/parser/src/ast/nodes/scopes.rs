@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NamedScope {
     pub name: PotentialDollarIdentifier,
+    pub used_by_loop: bool,
     pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
 }
 

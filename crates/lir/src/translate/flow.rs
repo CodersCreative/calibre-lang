@@ -10,7 +10,7 @@ RangeDeclaration
 
 use crate::{
     ast::{LirLValue, LirLoad, LirNodeType, LirRange, LirTerminator},
-    environment::LirEnvironment,
+    environment::{LabelContext, LirEnvironment},
     translate::LirLowering,
 };
 use calibre_mir::ast::{
@@ -22,7 +22,7 @@ use calibre_parser::Span;
 impl LirLowering for MirBreak {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
-        env.jump_to_loop_target_if_present(span, self.label.as_ref(), true);
+        env.jump_to_label_target_if_present(span, self.label.as_ref(), self.to_loop, true);
         LirNodeType::null()
     }
 }
@@ -30,7 +30,7 @@ impl LirLowering for MirBreak {
 impl LirLowering for MirContinue {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
-        env.jump_to_loop_target_if_present(span, self.label.as_ref(), false);
+        env.jump_to_label_target_if_present(span, self.label.as_ref(), true, false);
         LirNodeType::null()
     }
 }
@@ -154,7 +154,12 @@ impl LirLowering for MirLoop {
             target: body_id,
         });
 
-        env.loop_stack.push((body_id, exit_id, self.label));
+        env.label_stack.push(LabelContext {
+            header: Some(body_id),
+            exit: exit_id,
+            label: self.label,
+            is_loop: true,
+        });
 
         env.switch_to(body_id);
         env.lower_and_add_node(*self.body);
@@ -163,7 +168,7 @@ impl LirLowering for MirLoop {
             target: body_id,
         });
 
-        env.loop_stack.pop();
+        env.label_stack.pop();
 
         env.switch_to(exit_id);
         LirNodeType::null()

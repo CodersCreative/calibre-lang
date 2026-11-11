@@ -78,8 +78,14 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn jump_to_loop_target_if_present(&mut self, span: Span, label: Option<&Ustr>, use_exit: bool) {
-        if let Some(target) = self.find_loop_target(label, use_exit) {
+    fn jump_to_label_target_if_present(
+        &mut self,
+        span: Span,
+        label: Option<&Ustr>,
+        is_loop: bool,
+        use_exit: bool,
+    ) {
+        if let Some(target) = self.find_label_target(label, is_loop, use_exit) {
             self.set_terminator(LirTerminator::Jump { span, target });
         }
     }

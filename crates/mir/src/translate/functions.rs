@@ -478,6 +478,7 @@ impl MirLowering for AstFunction {
 
         let body = if let MiddleNodeType::ScopeDeclaration(MirScopeDecl {
             body: scope_body,
+            label: _,
             create_new_scope,
             is_temp: _,
             scope_id,
@@ -493,6 +494,7 @@ impl MirLowering for AstFunction {
             MiddleNode {
                 span: body.span,
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    label: None,
                     body: scope_body.into_boxed_slice(),
                     create_new_scope,
                     is_temp: true,
@@ -504,6 +506,7 @@ impl MirLowering for AstFunction {
             MiddleNode {
                 span: body.span,
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    label: None,
                     body: Box::new([body]),
                     create_new_scope: true,
                     is_temp: true,

@@ -52,24 +52,27 @@ fn extract_label_from_named_scope(
     match body.node_type {
         AstNodeType::ScopeDeclaration(AstScopeDef {
             body: scope_body,
-            named: Some(named),
+            named: Some(mut named),
             is_temp,
             create_new_scope,
             is_function_body,
             define: false,
         }) if named.args.is_empty() => {
-            let new_body = AstNode::new(
-                span,
-                AstNodeType::ScopeDeclaration(AstScopeDef {
-                    body: scope_body,
-                    named: None,
-                    is_temp,
-                    create_new_scope,
-                    is_function_body,
-                    define: false,
-                }),
-            );
-            (Some(named.name), new_body)
+            named.used_by_loop = true;
+            (
+                Some(named.name.clone()),
+                AstNode::new(
+                    span,
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
+                        body: scope_body,
+                        named: Some(named),
+                        is_temp,
+                        create_new_scope,
+                        is_function_body,
+                        define: false,
+                    }),
+                ),
+            )
         }
         _ => (None, body),
     }

@@ -285,6 +285,7 @@ impl MiddleEnvironment {
                 body.push(inner);
                 MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                        label: None,
                         body: body.into_boxed_slice(),
                         create_new_scope: false,
                         is_temp: false,

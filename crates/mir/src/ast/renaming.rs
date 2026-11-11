@@ -1,10 +1,10 @@
 use crate::{
     MiddleNode, MiddleNodeType, MirRenamable, MirRenameState,
     ast::{
-        MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
-        MirComparison, MirConditional, MirDeref, MirDrop, MirEnum, MirField, MirFunction,
-        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
-        MirReturn, MirScopeDecl, MirVarDecl,
+        MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall, MirComparison,
+        MirConditional, MirDeref, MirDrop, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex,
+        MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl,
+        MirVarDecl,
     },
     scoping::FullyQualifiedPath,
     symbols::{MiddleOverload, MiddleVariable, VariableKey},
@@ -25,10 +25,7 @@ impl MirRenamable for MiddleNode {
 impl MirRenamable for MiddleNodeType {
     fn rename(&mut self, state: &mut MirRenameState) {
         match self {
-            MiddleNodeType::Break(MirBreak {
-                label: _,
-                value: None,
-            })
+            MiddleNodeType::Break(_)
             | MiddleNodeType::Continue(_)
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Null
@@ -39,11 +36,6 @@ impl MirRenamable for MiddleNodeType {
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::ExternFunction { .. } => {}
-            MiddleNodeType::Break(MirBreak { label: _, value }) => {
-                if let Some(v) = value {
-                    v.rename(state);
-                }
-            }
             MiddleNodeType::Discriminant(value) => value.value.rename(state),
             MiddleNodeType::Emit(value) => value.value.rename(state),
             MiddleNodeType::Spawn(value) => value.value.rename(state),
@@ -104,6 +96,7 @@ impl MirRenamable for MiddleNodeType {
             MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body,
                 create_new_scope: _,
+                label: _,
                 is_temp: _,
                 scope_id: _,
                 function_body: _,

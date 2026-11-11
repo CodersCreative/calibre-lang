@@ -249,6 +249,7 @@ impl MirLowering for AstType {
             }),
             (None, Some(nodes)) => Ok(MiddleNode {
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    label: None,
                     body: Box::new([nodes.0, nodes.1]),
                     create_new_scope: false,
                     is_temp: false,
@@ -259,6 +260,7 @@ impl MirLowering for AstType {
             }),
             (Some(node), Some(nodes)) => Ok(MiddleNode {
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    label: None,
                     body: Box::new([node, nodes.0, nodes.1]),
                     create_new_scope: false,
                     is_temp: false,
@@ -688,6 +690,7 @@ impl MirLowering for AstImpl {
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                label: None,
                 body: statements.into_boxed_slice(),
                 create_new_scope: false,
                 is_temp: false,

@@ -379,6 +379,7 @@ pub struct ScopeContext {
     pub label: Option<Ustr>,
     pub result_target: Option<Ustr>,
     pub data_type: Option<MirDataType>,
+    pub is_function_body: bool,
     pub scope_id: ScopeId,
 }
 

@@ -55,7 +55,11 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
-            .map(|(name, args)| NamedScope { name, args });
+            .map(|(name, args)| NamedScope {
+                name,
+                used_by_loop: false,
+                args,
+            });
 
         choice((
             just(Token::Let)
