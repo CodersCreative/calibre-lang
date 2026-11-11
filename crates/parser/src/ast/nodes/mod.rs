@@ -61,6 +61,27 @@ pub mod types;
 pub mod unary;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum IdentifierOrDestructure {
+    Identifier {
+        var_type: VarType,
+        identifier: PotentialDollarIdentifier,
+    },
+    Destructure(DestructurePattern),
+}
+
+impl IdentifierOrDestructure {
+    pub fn text(&self) -> Option<&String> {
+        match self {
+            Self::Identifier {
+                var_type: _,
+                identifier,
+            } => Some(identifier.text()),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DestructurePattern {
     Tuple(Vec<Option<(VarType, PotentialDollarIdentifier)>>),
     Struct(Vec<(String, VarType, PotentialDollarIdentifier)>),
@@ -719,15 +740,12 @@ impl Substitutable for AstNodeType {
                     value: Box::new(value.substitute(subst)),
                 })
             }
-            Self::DestructureDeclaration(AstDeclareDestructure {
-                var_type,
-                pattern,
-                value,
-            }) => Self::DestructureDeclaration(AstDeclareDestructure {
-                var_type,
-                pattern,
-                value: Box::new(value.substitute(subst)),
-            }),
+            Self::DestructureDeclaration(AstDeclareDestructure { pattern, value }) => {
+                Self::DestructureDeclaration(AstDeclareDestructure {
+                    pattern,
+                    value: Box::new(value.substitute(subst)),
+                })
+            }
             Self::Emit(AstEmit::Channel {
                 left,
                 right,

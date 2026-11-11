@@ -1,6 +1,7 @@
 use crate::ast::idents::ParserText;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
+use crate::ast::nodes::IdentifierOrDestructure;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::functions::FunctionHeader;
 use crate::ast::nodes::functions::FunctionParam;
@@ -32,6 +33,24 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
         ))
         .or_not()
         .map(|x| x.unwrap_or(VarType::Immutable))
+    }
+}
+
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for IdentifierOrDestructure
+{
+    type Data = StatementData<'a, I>;
+
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
+        choice((
+            VarType::parser(())
+                .then(data.dollar_ident.clone())
+                .map(|(var_type, identifier)| Self::Identifier {
+                    var_type,
+                    identifier,
+                }),
+            DestructurePattern::parser(data).map(Self::Destructure),
+        ))
     }
 }
 

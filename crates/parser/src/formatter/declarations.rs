@@ -42,9 +42,8 @@ impl AstFormatting for AstDeclareDestructure {
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
-            "{} {} := {}",
-            self.var_type,
-            self.pattern.format(formatter, false),
+            "let {} := {}",
+            self.pattern.format(formatter),
             self.value.format(formatter)
         )
     }

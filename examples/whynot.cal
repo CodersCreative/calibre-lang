@@ -1,0 +1,38 @@
+const main := fn => {
+    let order_quantities : list:<list:<int>> = [
+        [1, 2, 3],
+        [1, 0, 2],
+        [2, 1],
+        [-1, 2],
+    ];
+
+    for order_index in len(order_quantities) => @outer {
+        print(fmt"Checking order #{order_index + 1}");
+
+        for quantity in order_quantities[order_index]! =>
+            if quantity <= 0 => {
+                print(fmt"\tInvalid quantity: {quantity}");
+                continue @outer
+            }
+
+        fmt"\tProcessing order #{order_index + 1} finished" |> print;
+    }
+
+    print();
+
+    let order_quantities : list:<<int, int, int>> = [
+        (1, 2, 3),
+        (1, 0, 2),
+        (2, 1, 2),
+        (-1, 2, 3)
+    ];
+
+    for (quantity1, quantity2, quantity3) in order_quantities => {
+        print("Checking order");
+
+        let is_valid := fn(quantity : int) -> str =>
+            return "valid" if quantity > 0 else "invalid";
+
+        fmt"\t{quantity1} is {is_valid(quantity1)}; {quantity2} is {is_valid(quantity2)}; {quantity3} is {is_valid(quantity3)}" |> print;
+    }
+}

@@ -262,15 +262,12 @@ pub trait NodeVisitor {
                     panic,
                 })
             }
-            AstNodeType::DestructureDeclaration(AstDeclareDestructure {
-                var_type,
-                pattern,
-                value,
-            }) => AstNodeType::DestructureDeclaration(AstDeclareDestructure {
-                var_type,
-                pattern,
-                value: Box::new(self.visit(*value)),
-            }),
+            AstNodeType::DestructureDeclaration(AstDeclareDestructure { pattern, value }) => {
+                AstNodeType::DestructureDeclaration(AstDeclareDestructure {
+                    pattern,
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::DestructureAssignment(AstAssignDestructure { pattern, value }) => {
                 AstNodeType::DestructureAssignment(AstAssignDestructure {
                     pattern,

@@ -13,7 +13,7 @@ impl AstFormatting for LoopType {
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         match self {
             LoopType::While(x) => x.format(formatter),
-            LoopType::For(id, x) => format!("{} in {}", id, x.format(formatter)),
+            LoopType::For(id, x) => format!("{} in {}", id.format(formatter), x.format(formatter)),
             LoopType::Let { value, pattern } => {
                 let mut txt = String::from("let ");
                 txt.push_str(&formatter.fmt_match_arm(&pattern.0[0], false));

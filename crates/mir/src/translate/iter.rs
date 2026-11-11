@@ -13,7 +13,7 @@ use calibre_parser::{
         comparison::BooleanOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, VarType,
+            AstNode, AstNodeType, IdentifierOrDestructure, VarType,
             assignment::AstAssignment,
             binary::{AstBinary, AstBoolean},
             conditionals::{AstIf, IfComparisonType},
@@ -255,7 +255,10 @@ impl MirLowering for AstIter {
         {
             return AstIter {
                 loop_type: Box::new(LoopType::For(
-                    PotentialDollarIdentifier::new(span, "_"),
+                    IdentifierOrDestructure::Identifier {
+                        var_type: VarType::Immutable,
+                        identifier: PotentialDollarIdentifier::new(span, "_"),
+                    },
                     x.clone(),
                 )),
                 ..self
@@ -289,7 +292,7 @@ impl MirLowering for AstIter {
             && self.until.is_none()
             && !self.spawned
             && let LoopType::For(x, condition) = *self.loop_type.clone()
-            && x.text() == "_"
+            && x.text().is_some_and(|x| x == "_")
             && let AstNodeType::IntLiteral(times) = env
                 .resolve_macro_constant_or_node(scope, condition)
                 .node_type

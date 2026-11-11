@@ -1,7 +1,7 @@
 use crate::ast::{
     Substitutable,
     idents::PotentialDollarIdentifier,
-    nodes::{AstNode, matching::MatchArmType},
+    nodes::{AstNode, IdentifierOrDestructure, matching::MatchArmType},
     types::ParserDataType,
 };
 use rustc_hash::FxHashMap;
@@ -14,7 +14,7 @@ pub enum LoopType {
         pattern: (Vec<MatchArmType>, Vec<AstNode>),
     },
     While(AstNode),
-    For(PotentialDollarIdentifier, AstNode),
+    For(IdentifierOrDestructure, AstNode),
     Loop,
 }
 

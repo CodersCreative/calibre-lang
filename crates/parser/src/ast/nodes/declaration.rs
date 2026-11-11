@@ -16,7 +16,6 @@ pub struct AstDeclaration {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstDeclareDestructure {
-    pub var_type: VarType,
     pub pattern: DestructurePattern,
     pub value: Box<AstNode>,
 }

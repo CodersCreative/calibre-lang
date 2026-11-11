@@ -138,7 +138,7 @@ impl LirLowering for MirScopeDecl {
                     ..
                 }) = &stmt.node_type
                 {
-                    let global_type = data_type.clone();
+                    let data_type = data_type.clone();
                     let identifier = identifier.clone();
                     let mutable = var_type == &VarType::Mutable;
 
@@ -155,7 +155,7 @@ impl LirLowering for MirScopeDecl {
                         identifier.clone(),
                         LirGlobal {
                             name: identifier,
-                            data_type: global_type,
+                            data_type,
                             blocks: sub_lowerer.blocks.into_iter().map(Some).collect(),
                             mutable,
                         },

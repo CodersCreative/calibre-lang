@@ -67,7 +67,7 @@ impl AstFormatting for AstAssignDestructure {
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
             "{} := {}",
-            self.pattern.format(formatter, false),
+            self.pattern.format(formatter),
             self.value.format(formatter)
         )
     }

@@ -1,6 +1,6 @@
-use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::binary::AstIn;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
+use crate::ast::nodes::{AstNodeType, DestructurePattern, IdentifierOrDestructure, VarType};
 use crate::ast::types::ParserDataType;
 use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
@@ -23,6 +23,11 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             just(Token::FatArrow).rewind().map(|_| LoopType::Loop),
             // ... (covers in for now)
             data.node.clone().map(LoopType::While),
+            // destructure in
+            IdentifierOrDestructure::parser(data.clone())
+                .then_ignore(just(Token::In))
+                .then(data.node.clone())
+                .map(|(ident, value)| LoopType::For(ident, value)),
             // let ... <- ...
             just(Token::Let)
                 .ignore_then(parse_pattern_list(data.clone()))
@@ -39,7 +44,33 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 if let AstNodeType::InDeclaration(AstIn { identifier, value }) = &node.node_type
                     && let AstNodeType::Identifier(ident) = &identifier.node_type
                 {
-                    LoopType::For(ident.value.get_ident().clone(), (**value).clone())
+                    LoopType::For(
+                        IdentifierOrDestructure::Identifier {
+                            identifier: ident.value.get_ident().clone(),
+                            var_type: VarType::Immutable,
+                        },
+                        (**value).clone(),
+                    )
+                } else if let AstNodeType::InDeclaration(AstIn { identifier, value }) =
+                    &node.node_type
+                    && let AstNodeType::TupleLiteral(values) = &identifier.node_type
+                {
+                    LoopType::For(
+                        IdentifierOrDestructure::Destructure(DestructurePattern::Tuple(
+                            values
+                                .values
+                                .iter()
+                                .map(|x| {
+                                    if let AstNodeType::Identifier(x) = &x.node_type {
+                                        Some((VarType::Immutable, x.value.get_ident().clone()))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect(),
+                        )),
+                        (**value).clone(),
+                    )
                 } else {
                     LoopType::While(node)
                 }

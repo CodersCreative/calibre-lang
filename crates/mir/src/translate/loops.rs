@@ -13,10 +13,11 @@ use calibre_parser::{
         comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, VarType,
+            AstNode, AstNodeType, IdentifierOrDestructure, VarType,
             access::AstIndex,
             binary::{AsFailureMode, AstAs, AstComparison},
             conditionals::{AstIf, IfComparisonType},
+            declaration::AstDeclareDestructure,
             flow::AstBreak,
             functions::CallArg,
             literals::AstRange,
@@ -192,7 +193,10 @@ impl MirLowering for AstLoop {
         {
             return AstLoop {
                 loop_type: Box::new(LoopType::For(
-                    PotentialDollarIdentifier::new(span, "_"),
+                    IdentifierOrDestructure::Identifier {
+                        var_type: VarType::Immutable,
+                        identifier: PotentialDollarIdentifier::new(span, "_"),
+                    },
                     x.clone(),
                 )),
                 ..self
@@ -412,13 +416,25 @@ impl MirLowering for AstLoop {
                     AstNode::member(span, next_node.clone(), "Some")
                 };
 
-                let var_name_node = AstNode::var_decl(
-                    span,
-                    name,
-                    VarType::Mutable,
-                    loop_item_value,
-                    ParserDataType::auto(span),
-                );
+                let var_name_node = match name {
+                    IdentifierOrDestructure::Identifier {
+                        var_type,
+                        identifier,
+                    } => AstNode::var_decl(
+                        span,
+                        identifier,
+                        var_type,
+                        loop_item_value,
+                        ParserDataType::auto(span),
+                    ),
+                    IdentifierOrDestructure::Destructure(identifier) => AstNode {
+                        node_type: AstNodeType::DestructureDeclaration(AstDeclareDestructure {
+                            pattern: identifier,
+                            value: Box::new(loop_item_value),
+                        }),
+                        span,
+                    },
+                };
 
                 let increment_node = AstNode::assign(
                     span,

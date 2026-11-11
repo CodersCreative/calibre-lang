@@ -3,7 +3,7 @@ use crate::{
     ast::{
         idents::ParserText,
         nodes::{
-            AstNode, AstNodeType, DestructurePattern, VarType,
+            AstNode, AstNodeType, DestructurePattern, IdentifierOrDestructure, VarType,
             matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern},
             scopes::AstScopeDef,
         },
@@ -79,16 +79,34 @@ pub trait AstFormatting {
     }
 }
 
-impl DestructurePattern {
-    pub fn format(&self, _formatter: &mut Formatter, wrap_tuple: bool) -> String {
+impl AstFormatting for IdentifierOrDestructure {
+    type PreFormat = ();
+
+    fn narrow_format(&self, formatter: &mut Formatter) -> String {
+        match self {
+            Self::Identifier {
+                var_type: VarType::Immutable,
+                identifier,
+            } => identifier.to_string(),
+            Self::Identifier {
+                var_type,
+                identifier,
+            } => format!("{} {}", var_type.print_only_ends(), identifier),
+            Self::Destructure(x) => x.format(formatter),
+        }
+    }
+}
+
+impl AstFormatting for DestructurePattern {
+    type PreFormat = ();
+
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         match self {
             DestructurePattern::Tuple(bindings) => {
                 let mut txt = String::new();
                 let mut first = true;
 
-                if wrap_tuple {
-                    txt.push('(');
-                }
+                txt.push('(');
 
                 for binding in bindings {
                     if !first {
@@ -106,9 +124,7 @@ impl DestructurePattern {
                     }
                 }
 
-                if wrap_tuple {
-                    txt.push(')');
-                }
+                txt.push(')');
 
                 txt
             }
@@ -722,7 +738,7 @@ impl Formatter {
                 value,
                 destructure: Some(pattern),
                 ..
-            } => format!(".{} : {}", value, pattern.format(self, false)),
+            } => format!(".{} : {}", value, pattern.format(self)),
             MatchArmType::Enum {
                 value,
                 var_type: VarType::Immutable,

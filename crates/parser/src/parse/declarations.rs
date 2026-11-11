@@ -96,7 +96,6 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(data.node.clone())
             .map(|(pattern, value)| AstDeclareDestructure {
-                var_type: VarType::Immutable,
                 pattern,
                 value: Box::new(value),
             })

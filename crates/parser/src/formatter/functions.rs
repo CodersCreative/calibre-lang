@@ -94,7 +94,7 @@ impl FunctionPreFormat {
         formatter: &mut Formatter,
     ) -> FunctionParamInfo {
         let name = if let Some(pattern) = destructure_map.get(&idx) {
-            pattern.format(formatter, true)
+            pattern.format(formatter)
         } else {
             param.identifier.to_string()
         };
