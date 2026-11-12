@@ -57,7 +57,7 @@ impl MirLowering for AstNot {
         AstNode {
             node_type: AstNodeType::ComparisonExpression(AstComparison {
                 left: self.value,
-                right: Box::new(AstNode::bool(env.context.current_span(), false)),
+                right: Box::new(AstNode::bool(span, false)),
                 operator: ComparisonOperator::Equal,
             }),
             span,

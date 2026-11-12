@@ -17,7 +17,7 @@ use calibre_parser::ast::{
         declaration::AstDeclaration,
         matching::MatchArmType,
     },
-    types::{ParserDataType, ParserInnerType},
+    types::ParserDataType,
 };
 
 pub struct PatternTranslatorDispatcher;
@@ -31,6 +31,7 @@ impl PatternTranslatorDispatcher {
         value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let compilation = match &inner_pattern {
             MatchArmType::Value(_) | MatchArmType::Wildcard(_) | MatchArmType::Rest(_) => {
@@ -56,7 +57,7 @@ impl PatternTranslatorDispatcher {
             }
             MatchArmType::IsType(data_type) => {
                 let condition = AstNode::new(
-                    env.context.current_span(),
+                    data_type.span,
                     AstNodeType::IsExpression(AstIs {
                         value: Box::new(value.clone()),
                         data_type: data_type.clone(),
@@ -84,7 +85,7 @@ impl PatternTranslatorDispatcher {
             }
             MatchArmType::In(in_value) => {
                 let condition = AstNode::new(
-                    env.context.current_span(),
+                    in_value.span,
                     AstNodeType::InDeclaration(AstIn {
                         identifier: Box::new(value.clone()),
                         value: Box::new(in_value.clone()),
@@ -111,7 +112,7 @@ impl PatternTranslatorDispatcher {
                 }
             }
             MatchArmType::Let { var_type, name } => {
-                let condition = AstNode::bool(env.context.current_span(), true);
+                let condition = AstNode::bool(*name.span(), true);
 
                 let mut bindings: Vec<BindingDeclaration> = aliases
                     .into_iter()
@@ -142,9 +143,10 @@ impl PatternTranslatorDispatcher {
                 }
             }
             MatchArmType::At { .. } => {
-                return Err(env.context.err_at_current(MiddleErr::Internal(
-                    "Unwrapped @ pattern still present".to_string(),
-                )));
+                return Err(env.context.err_at_span(
+                    span,
+                    MiddleErr::Internal("Unwrapped @ pattern still present".to_string()),
+                ));
             }
         };
 
@@ -153,24 +155,21 @@ impl PatternTranslatorDispatcher {
 
     pub fn bindings_to_decls(
         bindings: &[BindingDeclaration],
-        env: &MiddleEnvironment,
+        _env: &MiddleEnvironment,
     ) -> Vec<AstNode> {
         bindings
             .iter()
             .map(|binding| {
                 AstNode::new(
-                    env.context.current_span(),
+                    binding.value.span,
                     AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: binding.var_type,
-                        identifier: ParserText::new(env.context.current_span(), binding.name)
-                            .into(),
+                        identifier: ParserText::new(binding.value.span, binding.name).into(),
                         value: Box::new(binding.value.clone()),
-                        data_type: binding.data_type.clone().unwrap_or_else(|| {
-                            ParserDataType::new(
-                                env.context.current_span(),
-                                ParserInnerType::Auto(None),
-                            )
-                        }),
+                        data_type: binding
+                            .data_type
+                            .clone()
+                            .unwrap_or_else(|| ParserDataType::auto(binding.value.span)),
                         declared: false,
                     }),
                 )

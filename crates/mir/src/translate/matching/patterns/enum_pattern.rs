@@ -5,7 +5,7 @@ use crate::{
 };
 use calibre_parser::ast::{
     nodes::{AstNode, matching::MatchArmType},
-    types::{ParserDataType, ParserInnerType},
+    types::ParserDataType,
 };
 use ustr::Ustr;
 
@@ -21,6 +21,7 @@ impl PatternTranslator for EnumPatternTranslator {
         value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let MatchArmType::Enum {
             value: variant_name,
@@ -30,9 +31,10 @@ impl PatternTranslator for EnumPatternTranslator {
             pattern: payload_pattern,
         } = inner_pattern
         else {
-            return Err(env.context.err_at_current(MiddleErr::Internal(
-                "EnumPatternCompiler called with non-enum pattern".to_string(),
-            )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::Internal("EnumPatternCompiler called with non-enum pattern".to_string()),
+            ));
         };
 
         let resolved_variant = env
@@ -46,20 +48,18 @@ impl PatternTranslator for EnumPatternTranslator {
         let variant_index = if let Some(value_type) = value_type {
             env.enum_variant_index_from_data_type(value_type, &resolved_variant)
                 .ok_or_else(|| {
-                    env.context
-                        .err_at_current(MiddleErr::CantMatch(Box::new(ParserDataType::new(
-                            env.context.current_span(),
-                            ParserInnerType::Auto(None),
-                        ))))
+                    env.context.err_at_span(
+                        span,
+                        MiddleErr::CantMatch(Box::new(ParserDataType::auto(span))),
+                    )
                 })?
         } else {
             env.enum_variant_index_from_value(scope, value, &resolved_variant)
                 .ok_or_else(|| {
-                    env.context
-                        .err_at_current(MiddleErr::CantMatch(Box::new(ParserDataType::new(
-                            env.context.current_span(),
-                            ParserInnerType::Auto(None),
-                        ))))
+                    env.context.err_at_span(
+                        span,
+                        MiddleErr::CantMatch(Box::new(ParserDataType::auto(span))),
+                    )
                 })?
         };
 
@@ -82,8 +82,7 @@ impl PatternTranslator for EnumPatternTranslator {
         let payload_type =
             value_type.and_then(|x| env.resolve_member_field_type(x, &resolved_variant));
 
-        let payload_value =
-            AstNode::member(env.context.current_span(), value.clone(), resolved_variant);
+        let payload_value = AstNode::member(span, value.clone(), resolved_variant);
 
         if let Some(payload_pattern) = payload_pattern {
             if name.is_some() || destructure.is_some() {

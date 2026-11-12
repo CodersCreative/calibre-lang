@@ -24,14 +24,18 @@ impl PatternTranslator for StructPatternTranslator {
         _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let MatchArmType::StructPattern(fields) = inner_pattern else {
-            return Err(env.context.err_at_current(MiddleErr::Internal(
-                "StructPatternCompiler called with non-struct pattern".to_string(),
-            )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::Internal(
+                    "StructPatternCompiler called with non-struct pattern".to_string(),
+                ),
+            ));
         };
 
-        let mut condition = AstNode::bool(env.context.current_span(), true);
+        let mut condition = AstNode::bool(span, true);
 
         let mut bindings = aliases
             .into_iter()
@@ -53,16 +57,12 @@ impl PatternTranslator for StructPatternTranslator {
                     field: field_name,
                     value: expected,
                 } => {
-                    let current = AstNode::member(
-                        env.context.current_span(),
-                        value.clone(),
-                        field_name.clone(),
-                    );
+                    let current = AstNode::member(expected.span, value.clone(), field_name.clone());
 
                     condition = env.bool_and_nodes(
                         condition,
                         AstNode::new(
-                            env.context.current_span(),
+                            expected.span,
                             AstNodeType::ComparisonExpression(AstComparison {
                                 left: Box::new(current),
                                 right: Box::new(expected),
@@ -75,20 +75,16 @@ impl PatternTranslator for StructPatternTranslator {
                     field: field_name,
                     values,
                 } => {
-                    let current = AstNode::member(
-                        env.context.current_span(),
-                        value.clone(),
-                        field_name.clone(),
-                    );
+                    let current = AstNode::member(span, value.clone(), field_name.clone());
 
                     let cond = if values.is_empty() {
-                        AstNode::bool(env.context.current_span(), true)
+                        AstNode::bool(span, true)
                     } else {
                         let mut iter = values.into_iter();
 
                         let first = iter.next().expect("Length already checked, unreachable");
                         let mut cond = AstNode::new(
-                            env.context.current_span(),
+                            first.span,
                             AstNodeType::ComparisonExpression(AstComparison {
                                 left: Box::new(current.clone()),
                                 right: Box::new(first),
@@ -98,11 +94,11 @@ impl PatternTranslator for StructPatternTranslator {
 
                         for value in iter {
                             cond = AstNode::new(
-                                env.context.current_span(),
+                                value.span,
                                 AstNodeType::BooleanExpression(AstBoolean {
                                     left: Box::new(cond),
                                     right: Box::new(AstNode::new(
-                                        env.context.current_span(),
+                                        value.span,
                                         AstNodeType::ComparisonExpression(AstComparison {
                                             left: Box::new(current.clone()),
                                             right: Box::new(value),
@@ -124,11 +120,7 @@ impl PatternTranslator for StructPatternTranslator {
                     var_type,
                     name,
                 } => {
-                    let current = AstNode::member(
-                        env.context.current_span(),
-                        value.clone(),
-                        field_name.clone(),
-                    );
+                    let current = AstNode::member(*name.span(), value.clone(), field_name.clone());
 
                     bindings.push(BindingDeclaration {
                         name: env

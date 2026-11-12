@@ -141,7 +141,7 @@ impl MiddleEnvironment {
                         .resolve_type_from_node(scope, &target)
                         .ok_or_else(|| {
                             self.context
-                                .err_at_current(MiddleErr::CannotInferCurryTargetType)
+                                .err_at_span(span, MiddleErr::CannotInferCurryTargetType)
                         })?
                         .into(),
                     param_destructures: Vec::new(),
@@ -159,7 +159,7 @@ impl MiddleEnvironment {
     ) -> Result<AstNode, MiddleErr> {
         let ty = self.resolve_type_from_node(scope, &target).ok_or_else(|| {
             self.context
-                .err_at_current(MiddleErr::CannotInferCurryTargetType)
+                .err_at_span(span, MiddleErr::CannotInferCurryTargetType)
         })?;
 
         let defaults: Rc<[FunctionParamDefault]> = match &target.node_type {

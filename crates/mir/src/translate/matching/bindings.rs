@@ -5,9 +5,11 @@ use crate::{
 };
 use calibre_parser::ast::{
     nodes::{
-        AstNode,
+        AstNode, AstNodeType,
+        access::AstIndex,
         functions::CallArg,
-        matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern},
+        literals::AstRange,
+        matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, RestPattern},
     },
     types::{ParserDataType, ParserInnerType},
 };
@@ -23,6 +25,8 @@ impl BindingExtractor {
         value: &AstNode,
     ) -> Result<Vec<BindingDeclaration>, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let mut span = *inner_pattern.span();
+
         let mut bindings = aliases
             .into_iter()
             .map(|(var_type, name)| {
@@ -49,26 +53,68 @@ impl BindingExtractor {
                 });
             }
             MatchArmType::ActivePattern { function, pattern } => {
-                let value = AstNode::call(
-                    env.context.current_span(),
-                    function.clone(),
-                    vec![CallArg::Value(value.clone())],
-                );
+                let value =
+                    AstNode::call(span, function.clone(), vec![CallArg::Value(value.clone())]);
 
-                let value = AstNode::member(env.context.current_span(), value.clone(), "Some");
+                let value = AstNode::member(span, value.clone(), "Some");
 
                 bindings.extend(Self::extract_bindings(env, scope, pattern, &value)?);
             }
             MatchArmType::TuplePattern(items) => {
                 for (idx, item) in items.iter().enumerate() {
-                    let value =
-                        AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
+                    span = *item.span();
+
+                    let value = AstNode::member(span, value.clone(), idx.to_string());
+
                     bindings.extend(Self::extract_bindings(env, scope, item, &value)?);
                 }
             }
             MatchArmType::ListPattern(items) => {
+                let rest_index = items
+                    .iter()
+                    .position(|item| matches!(item, MatchArmType::Rest(_)));
+
                 for (idx, item) in items.iter().enumerate() {
-                    if matches!(item, MatchArmType::Rest(_)) {
+                    if let Some(rest_index) = rest_index
+                        && idx >= rest_index
+                    {
+                        span = *item.span();
+
+                        if let MatchArmType::Rest(RestPattern::Binding { var_type, name }) = item {
+                            let value = AstNode::new(
+                                span,
+                                AstNodeType::IndexAccess(AstIndex {
+                                    base: Box::new(value.clone()),
+                                    index: Box::new(AstNode::new(
+                                        span,
+                                        AstNodeType::RangeDeclaration(AstRange {
+                                            from: Box::new(AstNode::int(span, rest_index)),
+                                            to: Box::new(AstNode::call(
+                                                span,
+                                                AstNode::identifier(span, "len"),
+                                                vec![CallArg::Value(value.clone())],
+                                            )),
+                                            inclusive: false,
+                                        }),
+                                    )),
+                                    panic: true,
+                                }),
+                            );
+
+                            bindings.push(BindingDeclaration {
+                                name: env
+                                    .resolve(
+                                        scope,
+                                        name,
+                                        ResolutionOptions::default().with_dollar(),
+                                    )?
+                                    .unwrap_dollar(),
+                                value,
+                                var_type: *var_type,
+                                data_type: None,
+                            });
+                        }
+
                         break;
                     }
 
@@ -84,15 +130,13 @@ impl BindingExtractor {
                             var_type,
                             name,
                         } => {
+                            span = *name.span();
+
                             bindings.push(BindingDeclaration {
                                 name: env
                                     .resolve(scope, name, ResolutionOptions::default())?
                                     .unwrap_dollar(),
-                                value: AstNode::member(
-                                    env.context.current_span(),
-                                    value.clone(),
-                                    field_name.clone(),
-                                ),
+                                value: AstNode::member(span, value.clone(), field_name.clone()),
                                 var_type: *var_type,
                                 data_type: None,
                             });
@@ -106,6 +150,8 @@ impl BindingExtractor {
                 for part in parts {
                     match part {
                         MatchStringPatternPart::Binding { var_type, name } => {
+                            span = *name.span();
+
                             bindings.push(BindingDeclaration {
                                 name: env
                                     .resolve(
@@ -116,10 +162,7 @@ impl BindingExtractor {
                                     .unwrap_dollar(),
                                 value: value.clone(),
                                 var_type: *var_type,
-                                data_type: Some(ParserDataType::new(
-                                    env.context.current_span(),
-                                    ParserInnerType::Str,
-                                )),
+                                data_type: Some(ParserDataType::new(span, ParserInnerType::Str)),
                             });
                         }
                         MatchStringPatternPart::Literal(_)
@@ -146,8 +189,7 @@ impl BindingExtractor {
                         .resolve(scope, variant, ResolutionOptions::default().with_dollar())?
                         .unwrap_dollar();
 
-                    let payload_value =
-                        AstNode::member(env.context.current_span(), value.clone(), variant);
+                    let payload_value = AstNode::member(span, value.clone(), variant);
 
                     bindings.push(BindingDeclaration {
                         name,
@@ -161,7 +203,7 @@ impl BindingExtractor {
                             env,
                             scope,
                             payload_pattern,
-                            &AstNode::member(env.context.current_span(), value.clone(), variant),
+                            &AstNode::member(span, value.clone(), variant),
                         )?);
                     }
                 }

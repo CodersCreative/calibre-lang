@@ -269,7 +269,7 @@ impl MirLowering for AstIter {
         let resolved_data_type = match if self.data_type.is_auto() {
             self.map.type_of(env, scope, span).ok_or_else(|| {
                 env.context
-                    .err_at_current(MiddleErr::CannotInferLoopIteratorType)
+                    .err_at_span(span, MiddleErr::CannotInferLoopIteratorType)
             })
         } else {
             env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
@@ -416,7 +416,7 @@ impl MirLowering for AstIter {
                 .type_of(env, scope, span)
                 .ok_or_else(|| {
                     env.context
-                        .err_at_current(MiddleErr::CannotInferLoopIteratorType)
+                        .err_at_span(span, MiddleErr::CannotInferLoopIteratorType)
                 })
                 .ok()?
         } else {

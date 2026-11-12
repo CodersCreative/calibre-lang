@@ -24,10 +24,11 @@ impl PatternTranslator for ValuePatternTranslator {
         _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let condition = match inner_pattern {
             MatchArmType::Value(expected) => AstNode::new(
-                env.context.current_span(),
+                span,
                 AstNodeType::ComparisonExpression(AstComparison {
                     left: Box::new(value.clone()),
                     right: Box::new(expected),
@@ -35,12 +36,15 @@ impl PatternTranslator for ValuePatternTranslator {
                 }),
             ),
             MatchArmType::Wildcard(_) | MatchArmType::Rest(RestPattern::Discard(_)) => {
-                AstNode::bool(env.context.current_span(), true)
+                AstNode::bool(span, true)
             }
             _ => {
-                return Err(env.context.err_at_current(MiddleErr::Internal(
-                    "ValuePatternCompiler called with non-value pattern".to_string(),
-                )));
+                return Err(env.context.err_at_span(
+                    span,
+                    MiddleErr::Internal(
+                        "ValuePatternCompiler called with non-value pattern".to_string(),
+                    ),
+                ));
             }
         };
 

@@ -46,10 +46,14 @@ impl MiddleEnvironment {
                     return Ok(());
                 }
 
+                let span = value.span;
+
                 *data_type = if data_type.is_auto() {
                     self.resolve_type_from_node(scope, value).ok_or_else(|| {
-                        self.context
-                            .err_at_current(MiddleErr::CannotInferVariableType(ident.to_string()))
+                        self.context.err_at_span(
+                            span,
+                            MiddleErr::CannotInferVariableType(ident.to_string()),
+                        )
                     })?
                 } else {
                     self.resolve_data_type(scope, &*data_type, ResolutionOptions::typing())?

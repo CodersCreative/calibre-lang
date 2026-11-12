@@ -21,45 +21,46 @@ impl PatternTranslator for ActivePatternTranslator {
         _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let MatchArmType::ActivePattern { function, pattern } = inner_pattern else {
-            return Err(env.context.err_at_current(MiddleErr::Internal(
-                "ActivePatternTranslator called with inactive pattern".to_string(),
-            )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::Internal(
+                    "ActivePatternTranslator called with inactive pattern".to_string(),
+                ),
+            ));
         };
 
         let Some(MirDataType::Function { return_type, .. }) =
             function.type_of(env, scope, function.span)
         else {
-            return Err(env.context.err_at_current(MiddleErr::Internal(
-                "ActivePatternTranslator called with non function".to_string(),
-            )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::Internal("ActivePatternTranslator called with non function".to_string()),
+            ));
         };
 
-        let result = AstNode::call(
-            env.context.current_span(),
-            function.clone(),
-            vec![CallArg::Value(value.clone())],
-        );
+        let result = AstNode::call(span, function.clone(), vec![CallArg::Value(value.clone())]);
 
         let is_some = if return_type.is_option() {
             AstNode::call(
-                env.context.current_span(),
-                AstNode::member(env.context.current_span(), result.clone(), "is_some"),
+                span,
+                AstNode::member(span, result.clone(), "is_some"),
                 Vec::new(),
             )
         } else {
             AstNode::call(
-                env.context.current_span(),
-                AstNode::member(env.context.current_span(), result.clone(), "is_ok"),
+                span,
+                AstNode::member(span, result.clone(), "is_ok"),
                 Vec::new(),
             )
         };
 
         let unwrapped_value = if return_type.is_option() {
-            AstNode::member(env.context.current_span(), result.clone(), "Some")
+            AstNode::member(span, result.clone(), "Some")
         } else {
-            AstNode::member(env.context.current_span(), result.clone(), "Ok")
+            AstNode::member(span, result.clone(), "Ok")
         };
 
         let inner_translation = PatternTranslatorDispatcher::translate(

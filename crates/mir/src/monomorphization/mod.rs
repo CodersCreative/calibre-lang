@@ -357,7 +357,7 @@ impl MiddleEnvironment {
 
         let data_type = header.type_of(self, original_scope, span).ok_or_else(|| {
             self.context
-                .err_at_current(MiddleErr::CannotInferFromExpression(body.to_string()))
+                .err_at_span(span, MiddleErr::CannotInferFromExpression(body.to_string()))
         })?;
 
         let key =

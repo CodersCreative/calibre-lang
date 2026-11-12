@@ -28,14 +28,17 @@ impl PatternTranslator for StringPatternTranslator {
         _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let MatchArmType::StringPattern(parts) = inner_pattern else {
-            return Err(env.context.err_at_current(MiddleErr::Internal(
-                "StringPatternCompiler called with non-string pattern".to_string(),
-            )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::Internal(
+                    "StringPatternCompiler called with non-string pattern".to_string(),
+                ),
+            ));
         };
 
-        let span = env.context.current_span();
         let mut bindings = Vec::with_capacity(aliases.len() + parts.len());
 
         for (var_type, name) in aliases {

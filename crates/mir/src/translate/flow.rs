@@ -871,7 +871,8 @@ impl MirLowering for AstReturn {
                             };
 
                             if !node_ty.loose_eq(&ret_ty) {
-                                return Err(env.context.err_at_current(
+                                return Err(env.context.err_at_span(
+                                    span,
                                     MiddleErr::InvalidReturnType {
                                         expected: Box::new(ret_ty),
                                         found: Box::new(node_ty),

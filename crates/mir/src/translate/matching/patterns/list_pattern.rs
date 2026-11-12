@@ -8,7 +8,12 @@ use calibre_parser::{
     ast::{
         comparison::ComparisonOperator,
         nodes::{
-            AstNode, AstNodeType, access::AstIndex, binary::AstComparison, matching::MatchArmType,
+            AstNode, AstNodeType,
+            access::AstIndex,
+            binary::AstComparison,
+            functions::CallArg,
+            literals::AstRange,
+            matching::{MatchArmType, RestPattern},
         },
     },
 };
@@ -25,14 +30,17 @@ impl PatternTranslator for ListPatternTranslator {
         _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
+        let span = *inner_pattern.span();
 
         let MatchArmType::ListPattern(items) = inner_pattern else {
-            return Err(env.context.err_at_current(MiddleErr::Internal(
-                "ListPatternTranslator called with non-list pattern".to_string(),
-            )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::Internal(
+                    "ListPatternTranslator called with non-list pattern".to_string(),
+                ),
+            ));
         };
 
-        let span = env.context.current_span();
         let mut condition = AstNode::bool(span, true);
 
         let mut bindings = aliases
@@ -95,6 +103,7 @@ impl PatternTranslator for ListPatternTranslator {
                     let resolved_name = env
                         .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
                         .unwrap_dollar();
+
                     bindings.push(BindingDeclaration {
                         name: resolved_name,
                         value: current.clone(),
@@ -155,6 +164,40 @@ impl PatternTranslator for ListPatternTranslator {
         }
 
         if has_rest {
+            if let MatchArmType::Rest(RestPattern::Binding { var_type, name }) = &items[rest_index]
+            {
+                let name = env
+                    .resolve(scope, name, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
+                let value = AstNode::new(
+                    span,
+                    AstNodeType::IndexAccess(AstIndex {
+                        base: Box::new(value.clone()),
+                        index: Box::new(AstNode::new(
+                            span,
+                            AstNodeType::RangeDeclaration(AstRange {
+                                from: Box::new(AstNode::int(span, rest_index)),
+                                to: Box::new(AstNode::call(
+                                    span,
+                                    AstNode::identifier(span, "len"),
+                                    vec![CallArg::Value(value.clone())],
+                                )),
+                                inclusive: false,
+                            }),
+                        )),
+                        panic: true,
+                    }),
+                );
+
+                bindings.push(BindingDeclaration {
+                    name,
+                    value,
+                    var_type: *var_type,
+                    data_type: None,
+                });
+            }
+
             let suffix = &items[rest_index + 1..];
             let suffix_len = suffix.len() as i64;
 

@@ -334,6 +334,8 @@ impl MirLowering for AstFunction {
         let needs_caller_context = env.tagging.tag_info.contains(&TagInfo::CallerContext);
 
         for (i, param) in self.header.parameters.into_iter().enumerate() {
+            let span = *param.identifier.span();
+
             param_idents.push(param.identifier.clone());
 
             let og_name = env
@@ -354,19 +356,22 @@ impl MirLowering for AstFunction {
                 x
             } else if let Some(node) = &param.default {
                 node.type_of(env, new_scope, span).ok_or_else(|| {
-                    env.context
-                        .err_at_current(MiddleErr::CannotInferParameterType(
+                    env.context.err_at_span(
+                        span,
+                        MiddleErr::CannotInferParameterType(
                             og_name.to_string(),
                             "function".to_string(),
-                        ))
+                        ),
+                    )
                 })?
             } else {
-                return Err(env
-                    .context
-                    .err_at_current(MiddleErr::CannotInferParameterType(
+                return Err(env.context.err_at_span(
+                    span,
+                    MiddleErr::CannotInferParameterType(
                         og_name.to_string(),
                         "function".to_string(),
-                    )));
+                    ),
+                ));
             };
 
             let param_key = env.register_variable_with_temp_scope(
