@@ -4,7 +4,9 @@ use crate::{
         idents::ParserText,
         nodes::{
             AstNode, AstNodeType, DestructurePattern, IdentifierOrDestructure, VarType,
-            matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern},
+            matching::{
+                MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, RestPattern,
+            },
             scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
@@ -703,7 +705,10 @@ impl Formatter {
 
     pub fn fmt_match_arm(&mut self, arm: &MatchArmType, write_name: bool) -> String {
         match arm {
-            MatchArmType::Rest(_) => "..".to_string(),
+            MatchArmType::Rest(RestPattern::Discard(_)) => "..".to_string(),
+            MatchArmType::Rest(RestPattern::Binding { var_type, name }) => {
+                format!(".. : {} {}", var_type.print_only_ends(), name)
+            }
             MatchArmType::At {
                 var_type,
                 name,

@@ -10,7 +10,10 @@ use crate::{
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
     nodes::{
-        AstNode, AstNodeType, binary::AstComparison, functions::CallArg, matching::MatchArmType,
+        AstNode, AstNodeType,
+        binary::AstComparison,
+        functions::CallArg,
+        matching::{MatchArmType, RestPattern},
     },
 };
 
@@ -54,7 +57,10 @@ impl PatternTranslator for TuplePatternTranslator {
             let (inner_item, item_aliases) = item.alias_bindings();
 
             match inner_item {
-                MatchArmType::Rest(_) => break,
+                MatchArmType::Rest(RestPattern::Discard(_)) => break,
+                MatchArmType::Rest(RestPattern::Binding { var_type, name }) => {
+                    unimplemented!()
+                }
                 MatchArmType::Wildcard(_) => {
                     idx += 1;
                 }

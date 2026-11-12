@@ -5,6 +5,7 @@ use crate::ast::nodes::IdentifierOrDestructure;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::functions::FunctionHeader;
 use crate::ast::nodes::functions::FunctionParam;
+use crate::ast::nodes::matching::RestPattern;
 use crate::ast::nodes::matching::{
     AstFnMatch, AstMatch, MatchArmType, MatchBody, MatchStringPatternPart, MatchStructFieldPattern,
 };
@@ -231,6 +232,26 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
     }
 }
 
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for RestPattern {
+    type Data = StatementData<'a, I>;
+
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
+        just(Token::Range)
+            .ignore_then(
+                just(Token::Colon)
+                    .ignore_then(VarType::parser(()).then(data.dollar_ident.clone()))
+                    .or_not(),
+            )
+            .map_with_span(|pattern, span| match pattern {
+                Some(x) => RestPattern::Binding {
+                    var_type: x.0,
+                    name: x.1,
+                },
+                _ => RestPattern::Discard(span),
+            })
+    }
+}
+
 impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
     for MatchArmType
 {
@@ -299,7 +320,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     )])
                 }),
                 // rest
-                just(Token::Range).map_with_span(|_, span| MatchArmType::Rest(span)),
+                RestPattern::parser(data.clone()).map(MatchArmType::Rest),
                 // (...)
                 arm_type
                     .clone()

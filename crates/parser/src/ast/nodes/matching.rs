@@ -49,6 +49,16 @@ pub enum MatchStringPatternPart {
 
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum RestPattern {
+    Binding {
+        var_type: VarType,
+        name: PotentialDollarIdentifier,
+    },
+    Discard(Span),
+}
+
+#[repr(u8)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchArmType {
     At {
         var_type: VarType,
@@ -78,7 +88,7 @@ pub enum MatchArmType {
     Value(AstNode),
     IsType(ParserDataType),
     Wildcard(Span),
-    Rest(Span),
+    Rest(RestPattern),
 }
 
 impl Substitutable for MatchArmType {
@@ -197,7 +207,10 @@ impl MatchArmType {
             Self::Value(x) => &x.span,
             Self::IsType(x) => &x.span,
             Self::Wildcard(x) => x,
-            Self::Rest(x) => x,
+            Self::Rest(x) => match x {
+                RestPattern::Discard(x) => x,
+                RestPattern::Binding { name, .. } => name.span(),
+            },
         }
     }
 
