@@ -246,9 +246,15 @@ pub fn comparison(
         (RuntimeValue::Char(x), RuntimeValue::Char(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
+        (RuntimeValue::Char(x), RuntimeValue::Str(y), op) => Ok(RuntimeValue::Bool(
+            comparison_value_handle(op, Ustr::from(&String::from(x)), y),
+        )),
         (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
+        (RuntimeValue::Str(x), RuntimeValue::Char(y), op) => Ok(RuntimeValue::Bool(
+            comparison_value_handle(op, x, Ustr::from(&String::from(y))),
+        )),
         (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
             eq_value(&left, &right),
             Some(true)

@@ -56,45 +56,48 @@ impl LirLowering for MirBoolean {
         match self.operator {
             BooleanOperator::And => {
                 let right_block = env.create_block();
+                let false_block = env.create_block();
                 let merge_block = env.create_block();
 
                 env.set_terminator(LirTerminator::Branch {
                     span,
                     condition: left_val,
                     then_block: right_block,
-                    else_block: Some(merge_block),
+                    else_block: Some(false_block),
                 });
 
-                env.switch_to(right_block);
+                env.switch_to(false_block);
+                env.assign_temp_if_non_null(span, temp.clone(), LirNodeType::bool(false));
+                env.jump_if_open(span, merge_block);
 
+                env.switch_to(right_block);
                 let right_val = env.lower_node(*self.right);
                 env.assign_temp_if_non_null(span, temp.clone(), right_val);
-
                 env.jump_if_open(span, merge_block);
 
                 env.switch_to(merge_block);
-                env.assign_temp_if_non_null(span, temp.clone(), LirNodeType::bool(false));
             }
             BooleanOperator::Or => {
                 let right_block = env.create_block();
+                let true_block = env.create_block();
                 let merge_block = env.create_block();
-
                 env.set_terminator(LirTerminator::Branch {
                     span,
                     condition: left_val,
-                    then_block: merge_block,
+                    then_block: true_block,
                     else_block: Some(right_block),
                 });
 
-                env.switch_to(right_block);
+                env.switch_to(true_block);
+                env.assign_temp_if_non_null(span, temp.clone(), LirNodeType::bool(true));
+                env.jump_if_open(span, merge_block);
 
+                env.switch_to(right_block);
                 let right_val = env.lower_node(*self.right);
                 env.assign_temp_if_non_null(span, temp.clone(), right_val);
-
                 env.jump_if_open(span, merge_block);
 
                 env.switch_to(merge_block);
-                env.assign_temp_if_non_null(span, temp.clone(), LirNodeType::bool(true));
             }
         }
 
