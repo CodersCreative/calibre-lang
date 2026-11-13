@@ -510,13 +510,16 @@ impl VM {
             if start + new_len > self.reg_arena.len() {
                 self.reg_arena.resize(start + new_len, RuntimeValue::Null);
             }
+
             if start + new_len > self.reg_top {
                 self.reg_top = start + new_len;
             }
+
             reg_count = new_len;
             let frame = self.current_frame_mut();
             frame.reg_count = reg_count;
         }
+
         let pos = start + idx;
         std::mem::replace(&mut self.reg_arena[pos], value)
     }

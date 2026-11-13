@@ -26,6 +26,7 @@ impl FunctionLowering {
         let mut reg_use_count: FxHashMap<Reg, usize> = FxHashMap::default();
         let mut prev_count: FxHashMap<BlockId, usize> = FxHashMap::default();
         let mut referenced: FxHashSet<BlockId> = FxHashSet::default();
+        let mut edge_copy_targets: FxHashSet<BlockId> = FxHashSet::default();
         let mut worklist: Vec<BlockId> = Vec::new();
 
         let mut changed = true;
@@ -37,9 +38,19 @@ impl FunctionLowering {
 
             // Get jump onlys
             block_subst.clear();
+            edge_copy_targets.clear();
+
+            for block in blocks.iter().flatten() {
+                for edge_copy in &block.edge_copies {
+                    edge_copy_targets.insert(edge_copy.target);
+                }
+            }
+
             for block in blocks.iter().flatten() {
                 if block.instructions.len() == 1
                     && let Some(VMInstruction::Jump(VMJump { target })) = block.instructions.first()
+                    && block.edge_copies.is_empty()
+                    && !edge_copy_targets.contains(&block.id)
                 {
                     block_subst.insert(block.id, *target);
                 }
@@ -238,8 +249,10 @@ impl FunctionLowering {
                     let target = resolve_target(*target, &block_subst);
                     if target != block.id
                         && target != entry
-                        && prev_count.get(&target).copied().unwrap_or(0) <= 1
+                        && prev_count.get(&target).copied().unwrap_or_default() <= 1
                         && let Some(&target_idx) = block_map.get(&target)
+                        && let Some(target_block) = blocks[target_idx].as_ref()
+                        && can_merge_edge_copies(block, target_block, target)
                     {
                         merges.push((i, target_idx, target));
                     }
@@ -263,6 +276,7 @@ impl FunctionLowering {
                 }
             }
         }
+
         blocks
     }
 }
@@ -337,7 +351,22 @@ impl VMBlock {
             .append(&mut target_block.instruction_spans);
 
         self.edge_copies.append(&mut target_block.edge_copies);
+        self.edge_copies.sort_unstable_by_key(|plan| plan.target.0);
     }
+}
+
+fn can_merge_edge_copies(source: &VMBlock, target: &VMBlock, merged_target: BlockId) -> bool {
+    let source_targets: FxHashSet<BlockId> = source
+        .edge_copies
+        .iter()
+        .map(|plan| plan.target)
+        .filter(|target| *target != merged_target)
+        .collect();
+
+    target
+        .edge_copies
+        .iter()
+        .all(|plan| plan.target != source.id && !source_targets.contains(&plan.target))
 }
 
 #[inline]
