@@ -1,4 +1,4 @@
 fn match {
-    .Some : x => x,
+    .Some : let x => x,
     _ => 1000
 };

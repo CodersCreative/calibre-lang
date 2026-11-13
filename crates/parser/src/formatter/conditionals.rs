@@ -1,9 +1,5 @@
 use crate::{
-    ast::nodes::{
-        VarType,
-        conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
-        matching::MatchArmType,
-    },
+    ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
     formatter::{AstFormatting, Formatter},
 };
 
@@ -18,25 +14,10 @@ impl AstFormatting for AstIf {
             }
             IfComparisonType::IfLet { value, pattern } => {
                 txt.push_str(" let ");
-                txt.push_str(&formatter.fmt_match_arm(&pattern.0[0], false));
-                for node in pattern.0.iter().skip(1) {
-                    txt.push_str(&format!(" | {}", formatter.fmt_match_arm(node, false)));
-                }
 
-                match &pattern.0[0] {
-                    MatchArmType::Enum {
-                        value: _,
-                        var_type: VarType::Immutable,
-                        name: Some(name),
-                        ..
-                    } => txt.push_str(&format!(" : {}", name)),
-                    MatchArmType::Enum {
-                        value: _,
-                        var_type,
-                        name: Some(name),
-                        ..
-                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
-                    _ => {}
+                txt.push_str(&formatter.fmt_match_arm(&pattern.0[0]));
+                for node in pattern.0.iter().skip(1) {
+                    txt.push_str(&format!(" | {}", formatter.fmt_match_arm(node)));
                 }
 
                 if !pattern.1.is_empty() {

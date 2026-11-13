@@ -7,7 +7,7 @@ const main := fn => {
 	map.set("d", 4);
 	let removed := map.remove("a");
 	match removed {
-		.Some : v => print("removed a => " & v),
+		.Some : let v => print("removed a => " & v),
 		.None => print("removed a => none")
 	};
 	

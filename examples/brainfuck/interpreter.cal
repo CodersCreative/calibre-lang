@@ -16,7 +16,7 @@ impl BrainFuck {
 		let mut c := 0;
 		let mut i := 0;
 		
-		for let .Some : let ch <- s[i] => {
+		for let .Some : let let ch <- s[i] => {
 			match ch {
 				'>' => {
 					if self.pointer >= (self.capacity - 1) => {
@@ -96,7 +96,7 @@ impl BrainFuck {
 
 @current_context const main := fn => {
 	let input_path := Path.new(match Args.first() {
-		.Some : p => emit p,
+		.Some : let p => emit p,
 		.None => emit current_context.path.replace("interpreter.cal", "helloworld.bf")
 	});
 

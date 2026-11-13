@@ -223,22 +223,8 @@ impl PatternTranslator for TuplePatternTranslator {
 
                     idx += 1;
                 }
-                MatchArmType::Enum {
-                    value: variant_name,
-                    var_type,
-                    name,
-                    destructure,
-                    pattern: payload_pattern,
-                } => {
+                enum_pattern @ MatchArmType::Enum { .. } => {
                     let current = AstNode::member(span, value.clone(), idx.to_string());
-
-                    let enum_pattern = MatchArmType::Enum {
-                        value: variant_name,
-                        var_type,
-                        name,
-                        destructure,
-                        pattern: payload_pattern,
-                    };
 
                     // TODO Extract the value type
                     let enum_compilation = PatternTranslatorDispatcher::translate(

@@ -165,8 +165,8 @@ const main := fn => {
 	
 	parsed |> fn match str!int {
 		// The fn match statement that turns a pattern matching into functions easily
-		.Ok : v => print("result ok => " & v),
-		.Err : e => print("result err => " & e)
+		.Ok : let v => print("result ok => " & v),
+		.Err : let e => print("result err => " & e)
 	};
 	
 	let mut maybe := try some(9).map(fn (n : int) -> int => n * 2) => emit 0;
@@ -226,9 +226,9 @@ const main := fn => {
 	};
 	
 	// if let / for let on options.
-	if let .Some : value <- some(12) => print("if let some => " & value);
+	if let .Some : let value <- some(12) => print("if let some => " & value);
 	
-	for let .Some : value <- some(99) => {
+	for let .Some : let value <- some(99) => {
 		print("for let some => " & value);
 		
 		break;

@@ -66,7 +66,7 @@ type MaybeInt := enum {
 
 const inspect := fn (v : MaybeInt) => {
   match v {
-    .Some : x => print("value = " & x),
+    .Some :let x => print("value = " & x),
     .None => print("none")
   };
 };

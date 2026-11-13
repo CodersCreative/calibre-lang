@@ -6,7 +6,7 @@ import Args from std::env;
 
 @current_context const main := fn => {
 	let input_path := Path.new(match Args.first() {
-		.Some : p => p,
+		.Some : let p => p,
 		.None => current_context.path.replace("parser.cal", "test.json")
 	});
 	

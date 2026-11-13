@@ -14,7 +14,7 @@ const main := fn => {
 const find_values := fn(data_array : &list:<int?>) -> uint => {
   let mut number := stdin("Enter number : ") as int;
 
-  for let .Err : e <- number => {
+  for let .Err : let e <- number => {
     print("Incorrect number entered : " & e & ".\nTry again...");
     number := stdin("Enter number : ") as int;
   }

@@ -13,13 +13,13 @@ impl<T> option:<T> {
 	
 	@pure
 	const map := fn <U> (self : T?, op : fn (T) -> U) -> U? => match self {
-		.Some : v => return some(op(v)),
+		.Some : let v => return some(op(v)),
 		.None => return none
 	};
 
 	@pure
 	const and_then := fn <U> (self : T?, op : fn (T) -> U?) -> U? => match self {
-		.Some : v => return op(v),
+		.Some : let v => return op(v),
 		.None => return none
 	};
 };

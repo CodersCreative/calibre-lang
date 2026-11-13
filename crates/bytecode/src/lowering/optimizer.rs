@@ -89,6 +89,8 @@ impl FunctionLowering {
             reg_use_count.clear();
             prev_count.clear();
 
+            let mut edge_copied_regs: FxHashSet<Reg> = FxHashSet::default();
+
             for block in blocks.iter().flatten() {
                 for instr in &block.instructions {
                     instr.count_instr_uses(&mut reg_use_count);
@@ -97,6 +99,8 @@ impl FunctionLowering {
                 for edge_copy in &block.edge_copies {
                     for copy in &edge_copy.copies {
                         *reg_use_count.entry(copy.src).or_insert(0) += 1;
+                        edge_copied_regs.insert(copy.src);
+                        edge_copied_regs.insert(copy.dst);
                     }
                 }
 
@@ -140,6 +144,7 @@ impl FunctionLowering {
                         && !instr.has_side_effects()
                         && let Some(dst) = instr.get_dst()
                         && reg_use_count.get(dst).copied().unwrap_or(0) == 0
+                        && !edge_copied_regs.contains(dst)
                     {
                         remove_current = true;
                     }
@@ -179,6 +184,8 @@ impl FunctionLowering {
                             && dst == src1
                             && dst != dst2
                             && reg_use_count.get(dst).copied().unwrap_or(0) == 1
+                            && !edge_copied_regs.contains(dst2)
+                            && !edge_copied_regs.contains(dst)
                         {
                             *dst = *dst2;
                             remove_next = true;

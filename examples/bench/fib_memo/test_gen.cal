@@ -12,7 +12,7 @@ const fib := fn() -> gen:<int> => {
 
 const main := fn => {
 	let fib := fib().take(31);
-	for let .Some : i <- fib.next() => {
+	for let .Some : let i <- fib.next() => {
 		print(i);
 	}
 };

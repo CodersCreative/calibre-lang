@@ -132,10 +132,10 @@ pub fn transform_spawn_iter(
                             (
                                 MatchArmType::Enum {
                                     value: ParserText::from(String::from("Some")).into(),
-                                    var_type: VarType::Immutable,
-                                    name: Some(item_ident.clone()),
-                                    destructure: None,
-                                    pattern: None,
+                                    pattern: Some(Box::new(MatchArmType::Let {
+                                        var_type: VarType::Immutable,
+                                        name: item_ident.clone(),
+                                    })),
                                 },
                                 Vec::new(),
                                 Box::new(AstNode::new(

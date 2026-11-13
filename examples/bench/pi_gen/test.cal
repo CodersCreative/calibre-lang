@@ -16,7 +16,7 @@ const calculate_pi_gen := fn (n_terms : int) -> float => {
 	let mut pi := 0f;
 	let mut it := pi_terms_gen(n_terms);
 	
-	for let .Some : term <- it.next() => {
+	for let .Some : let term <- it.next() => {
 		pi += term;
 	};
 	

@@ -130,7 +130,7 @@ const main := fn => {
 	let sum := try sum_ch.get() => 0
 	
 	let fac := match fac_ch.get() {
-		.Some : v => emit v,
+		.Some : let v => emit v,
 		.None => emit 0
 	};
 	

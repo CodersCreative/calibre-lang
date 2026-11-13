@@ -48,17 +48,17 @@ const main := fn => {
 	
 	wg.wait();
 	let bmi_val : float = match bmi_ch.get() {
-		.Some : v => v,
+		.Some : let v => v,
 		.None => 0f
 	};
 	
 	let fac_val : int = match fac_ch.get() {
-		.Some : v => v,
+		.Some : let v => v,
 		.None => 0
 	};
 	
 	let lock_val : bool = match lock_ch.get() {
-		.Some : v => v,
+		.Some : let v => v,
 		.None => false
 	};
 	

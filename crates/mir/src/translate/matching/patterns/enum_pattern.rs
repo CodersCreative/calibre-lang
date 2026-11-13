@@ -7,7 +7,6 @@ use calibre_parser::ast::{
     nodes::{AstNode, matching::MatchArmType},
     types::ParserDataType,
 };
-use ustr::Ustr;
 
 pub struct EnumPatternTranslator;
 
@@ -25,10 +24,7 @@ impl PatternTranslator for EnumPatternTranslator {
 
         let MatchArmType::Enum {
             value: variant_name,
-            var_type,
-            name,
-            destructure,
-            pattern: payload_pattern,
+            pattern,
         } = inner_pattern
         else {
             return Err(env.context.err_at_span(
@@ -84,54 +80,17 @@ impl PatternTranslator for EnumPatternTranslator {
 
         let payload_value = AstNode::member(span, value.clone(), resolved_variant);
 
-        if let Some(payload_pattern) = payload_pattern {
-            if name.is_some() || destructure.is_some() {
-                let name = match name {
-                    Some(x) => env
-                        .resolve(scope, &x, ResolutionOptions::default().with_dollar())?
-                        .unwrap_dollar(),
-                    _ => Ustr::from("match_destructure"),
-                };
-
-                bindings.push(BindingDeclaration {
-                    name,
-                    value: payload_value.clone(),
-                    var_type,
-                    data_type: payload_type.clone().map(ParserDataType::from),
-                });
-            }
-
-            // TODO Extract the value type
-            let payload_compilation = PatternTranslatorDispatcher::translate(
+        if let Some(pattern) = pattern {
+            let inner_translation = PatternTranslatorDispatcher::translate(
                 env,
                 scope,
-                &payload_pattern,
+                &pattern,
                 &payload_value,
                 payload_type.as_ref(),
             )?;
 
-            bindings.extend(payload_compilation.bindings);
-
-            let condition = env.bool_and_nodes(condition, payload_compilation.condition);
-
-            Ok(PatternTranslation {
-                condition,
-                bindings,
-            })
-        } else if name.is_some() || destructure.is_some() {
-            let name = match name {
-                Some(x) => env
-                    .resolve(scope, &x, ResolutionOptions::default().with_dollar())?
-                    .unwrap_dollar(),
-                _ => Ustr::from("match_destructure"),
-            };
-
-            bindings.push(BindingDeclaration {
-                name,
-                value: payload_value,
-                var_type,
-                data_type: payload_type.map(ParserDataType::from),
-            });
+            let condition = env.bool_and_nodes(condition, inner_translation.condition);
+            bindings.extend(inner_translation.bindings);
 
             Ok(PatternTranslation {
                 condition,

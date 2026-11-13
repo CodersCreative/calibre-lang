@@ -33,7 +33,7 @@ const solve_part1 := fn (ranges : list:<str>, worker_count : int) -> int => {
 	
 	for _ in 0..worker_count => {
 		let part : int = match out.get() {
-			.Some : v => emit v,
+			.Some : let v => emit v,
 			.None => emit 0
 		};
 		sum += part;
@@ -55,7 +55,7 @@ const solve_part2 := fn (ranges : list:<str>, worker_count : int) -> int => {
 	
 	for _ in 0..worker_count => {
 		let part : int = match out.get() {
-			.Some : v => emit v,
+			.Some : let v => emit v,
 			.None => emit 0
 		};
 		sum += part;

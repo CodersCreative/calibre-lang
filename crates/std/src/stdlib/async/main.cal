@@ -68,7 +68,7 @@ impl<T> LazyLock:<T> {
 	@ignore_invalid_return const get_or_init := fn (self : &Self) -> &mut T => {
 		let mut value : <&mut T>? = self.inner.get();
 		match value {
-			.Some : x => return x,
+			.Some : let x => return x,
 			.None => {
 				value.* := self.init_fn();
 				return try value => panic();
@@ -79,7 +79,7 @@ impl<T> LazyLock:<T> {
 	@ignore_invalid_return const get_or_set := fn (self : &Self, default : T) -> &mut T => {
 		let mut value : <&mut T>? = self.inner.get();
 		match value {
-			.Some : x => return x,
+			.Some : let x => return x,
 			.None => {
 				value.* := default;
 				return try value => panic();

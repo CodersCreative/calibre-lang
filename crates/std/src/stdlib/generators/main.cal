@@ -16,7 +16,7 @@ impl<T> gen:<T> {
 		
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				out <<= value;
 			} else => {
 				break;
@@ -30,7 +30,7 @@ impl<T> gen:<T> {
 	const map := fn<U>(mut self : Self, op : fn(T) -> U) -> gen:<U> => {
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				return op(value);
 			} else => {
 				return;
@@ -42,7 +42,7 @@ impl<T> gen:<T> {
 	const filter := fn(mut self : Self, pred : fn(T) -> bool) -> gen:<T> => {
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				if pred(value) => return value;
 			} else => {
 				return;
@@ -54,7 +54,7 @@ impl<T> gen:<T> {
 	const for_each := fn(mut self : Self, op : fn(T)) => {
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				op(value);
 			} else => {
 				return;
@@ -68,7 +68,7 @@ impl<T> gen:<T> {
 		
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				acc := op(acc, value);
 			} else => {
 				break;
@@ -82,7 +82,7 @@ impl<T> gen:<T> {
 	const any := fn(mut self : Self, pred : fn (T) -> bool) -> bool => {
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				if pred(value) => return true;
 			} else => {
 				break;
@@ -96,7 +96,7 @@ impl<T> gen:<T> {
 	const all := fn (mut self : Self, pred : fn (T) -> bool) -> bool => {
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				if !pred(value) => return false;
 			} else => {
 				break;
@@ -110,7 +110,7 @@ impl<T> gen:<T> {
 	const find := fn (mut self : Self, pred : fn (T) -> bool) -> T? => {
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				if pred(value) => return some(value);
 			} else => {
 				break;
@@ -142,7 +142,7 @@ impl<T> gen:<T> {
 		
 		for i < n => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				return value;
 				i += 1;
 			} else => {
@@ -168,7 +168,7 @@ impl<T> gen:<T> {
 		
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				return value;
 			} else => {
 				return;
@@ -182,7 +182,7 @@ impl<T> gen:<T> {
 	
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				return (i += 1, value);
 			} else => {
 				return;
@@ -197,7 +197,7 @@ impl<T> gen:<T> {
 		
 		for => {
 			let v : T? = self.next();
-			if let .Some : value <- v => {
+			if let .Some : let value <- v => {
 				if (i % step) = 0 => return value;
 				i += 1;
 			} else => {

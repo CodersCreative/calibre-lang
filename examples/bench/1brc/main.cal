@@ -71,7 +71,7 @@ const process_thread := fn(lines : list:<str>, ch : &mut Channel:<list:<ProcessR
     }
 
     for !ch.closed() =>
-        if let .Some : x <- ch.get() => {
+        if let .Some : let x <- ch.get() => {
             print(x);
         } else => {
             break;

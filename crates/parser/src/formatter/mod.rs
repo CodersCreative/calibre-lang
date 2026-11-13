@@ -703,7 +703,7 @@ impl Formatter {
             .join(" & ")
     }
 
-    pub fn fmt_match_arm(&mut self, arm: &MatchArmType, write_name: bool) -> String {
+    pub fn fmt_match_arm(&mut self, arm: &MatchArmType) -> String {
         match arm {
             MatchArmType::Rest(RestPattern::Discard(_)) => "..".to_string(),
             MatchArmType::Rest(RestPattern::Binding { var_type, name }) => {
@@ -719,50 +719,25 @@ impl Formatter {
                 } else {
                     format!("{} {}", var_type.print_only_ends(), name)
                 };
-                format!("{left} @ {}", self.fmt_match_arm(pattern, write_name))
+                format!("{left} @ {}", self.fmt_match_arm(pattern))
             }
             MatchArmType::In(node) => format!("in {}", node.format(self)),
             MatchArmType::StringPattern(parts) => self.fmt_match_string_parts(parts),
+            MatchArmType::ActivePattern { function, pattern } => {
+                format!("{} : {}", function, self.fmt_match_arm(pattern))
+            }
             MatchArmType::Enum {
                 value,
                 pattern: Some(pattern),
                 ..
-            } => {
-                let payload = self.fmt_match_arm(pattern, false);
-                let payload = if matches!(pattern.as_ref(), MatchArmType::TuplePattern(_)) {
-                    format!("({})", payload)
-                } else {
-                    payload
-                };
-                format!(".{} : {}", value, payload)
-            }
-            MatchArmType::ActivePattern { function, pattern } => {
-                format!("{} : {}", function, self.fmt_match_arm(pattern, write_name))
-            }
-            MatchArmType::Enum {
-                value,
-                destructure: Some(pattern),
-                ..
-            } => format!(".{} : {}", value, pattern.format(self)),
-            MatchArmType::Enum {
-                value,
-                var_type: VarType::Immutable,
-                name: Some(name),
-                ..
-            } if write_name => format!(".{} : {}", value, name),
-            MatchArmType::Enum {
-                value,
-                var_type,
-                name: Some(name),
-                ..
-            } if write_name => format!(".{} : {} {}", value, var_type.print_only_ends(), name),
+            } => format!(".{} : {}", value, self.fmt_match_arm(pattern)),
             MatchArmType::Let { var_type, name } => format!("{} {}", var_type, name),
             MatchArmType::Enum { value, .. } => format!(".{}", value),
             MatchArmType::TuplePattern(items) => format!(
                 "({})",
                 items
                     .iter()
-                    .map(|x| self.fmt_match_arm(x, write_name))
+                    .map(|x| self.fmt_match_arm(x))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -770,7 +745,7 @@ impl Formatter {
                 "[{}]",
                 items
                     .iter()
-                    .map(|x| self.fmt_match_arm(x, write_name))
+                    .map(|x| self.fmt_match_arm(x))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

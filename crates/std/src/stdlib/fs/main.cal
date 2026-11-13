@@ -24,8 +24,8 @@ impl Path {
 
 	const canonicalize := fn (self : &Path) -> str!Path => {
 		match path_canonicalize(self.inner) {
-			.Ok : p => return ok(Path { inner : p }),
-			.Err : e => return err(e)
+			.Ok : let p => return ok(Path { inner : p }),
+			.Err : let e => return err(e)
 		};
 	};
 
@@ -79,28 +79,28 @@ impl File {
 	const close := fn (self : &File) -> str!null => {
 		match file_close(self.inner) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e)
+			.Err : let e => return err(e)
 		};
 	};
 
 	const flush := fn (self : &File) -> str!null => {
 		match file_flush(self.inner) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e)
+			.Err : let e => return err(e)
 		};
 	};
 
 	const write := fn (self : &File, content : dyn) -> str!null => {
 		match file_write(self.inner, "" & content) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e)
+			.Err : let e => return err(e)
 		};
 	};
 
 	const write_line := fn (self : &File, content : dyn) -> str!null => {
 		match file_write_line(self.inner, "" & content) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e)
+			.Err : let e => return err(e)
 		};
 	};
 
@@ -111,18 +111,18 @@ impl File {
 
 	const read_all := fn (self : &File) -> str!str => {
 		match file_read_all(self.inner) {
-			.Ok : content => return ok(content),
-			.Err : e => return err(e)
+			.Ok : let content => return ok(content),
+			.Err : let e => return err(e)
 		};
 	};
 
 	const read_lines := fn (self : &File) -> str!list:<str> => {
 		let result : str!str = self.read_all();
 		match result {
-			.Ok : content => {
+			.Ok : let content => {
 				return ok((content as! str).split("\n"))
 			},
-			.Err : e => {
+			.Err : let e => {
 				if e = "eof" => break;
 				return err(e);
 			}
@@ -137,15 +137,15 @@ impl DirEntry {
 
 	const file_type := fn (self : &DirEntry) -> str!FileType => {
 		match direntry_file_type(self.inner) {
-			.Ok : ft => return ok(ft),
-			.Err : e => return err(e)
+			.Ok : let ft => return ok(ft),
+			.Err : let e => return err(e)
 		};
 	};
 
 	const metadata := fn (self : &DirEntry) -> str!Metadata => {
 		match direntry_metadata(self.inner) {
-			.Ok : meta => return ok(Metadata { inner : meta }),
-			.Err : e => return err(e)
+			.Ok : let meta => return ok(Metadata { inner : meta }),
+			.Err : let e => return err(e)
 		};
 	};
 };
@@ -161,24 +161,24 @@ impl Metadata {
 	@pure
 	const modified := fn (self : &Metadata) -> str!int => {
 		match metadata_modified(self.inner) {
-			.Ok : time => return ok(time),
-			.Err : e => return err(e)
+			.Ok : let time => return ok(time),
+			.Err : let e => return err(e)
 		};
 	};
 
 	@pure
 	const created := fn (self : &Metadata) -> str!int => {
 		match metadata_created(self.inner) {
-			.Ok : time => return ok(time),
-			.Err : e => return err(e)
+			.Ok : let time => return ok(time),
+			.Err : let e => return err(e)
 		};
 	};
 
 	@pure
 	const accessed := fn (self : &Metadata) -> str!int => {
 		match metadata_accessed(self.inner) {
-			.Ok : time => return ok(time),
-			.Err : e => return err(e)
+			.Ok : let time => return ok(time),
+			.Err : let e => return err(e)
 		};
 	};
 
@@ -198,7 +198,7 @@ impl Dir {
 	const create := fn (self : &Dir) -> str!null => {
 		match dir_create(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => {
+			.Err : let e => {
 				if self.exists() => return ok(null) else => return err("failed to create directory: " & e);
 			}
 		};
@@ -207,21 +207,21 @@ impl Dir {
 	const create_all := fn (self : &Dir) -> str!null => {
 		match dir_create_all(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err("failed to create directory: " & e)
+			.Err : let e => return err("failed to create directory: " & e)
 		};
 	};
 
 	const remove := fn (self : &Dir) -> str!null => {
 		match dir_remove(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err("failed to remove directory: " & e)
+			.Err : let e => return err("failed to remove directory: " & e)
 		};
 	};
 
 	const remove_all := fn (self : &Dir) -> str!null => {
 		match dir_remove_all(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err("failed to remove directory: " & e)
+			.Err : let e => return err("failed to remove directory: " & e)
 		};
 	};
 

@@ -13,7 +13,6 @@ use calibre_parser::ast::{
     },
     types::{ParserDataType, ParserInnerType},
 };
-use ustr::Ustr;
 
 pub struct BindingExtractor;
 
@@ -171,41 +170,12 @@ impl BindingExtractor {
                 }
             }
             MatchArmType::Enum {
-                var_type,
-                name,
-                destructure,
-                pattern: payload_pattern,
                 value: variant,
+                pattern,
             } => {
-                if name.is_some() || destructure.is_some() || payload_pattern.is_some() {
-                    let name = match name {
-                        Some(x) => env
-                            .resolve(scope, x, ResolutionOptions::default().with_dollar())?
-                            .unwrap_dollar(),
-                        _ => Ustr::from("match_destructure"),
-                    };
-
-                    let variant = env
-                        .resolve(scope, variant, ResolutionOptions::default().with_dollar())?
-                        .unwrap_dollar();
-
-                    let payload_value = AstNode::member(span, value.clone(), variant);
-
-                    bindings.push(BindingDeclaration {
-                        name,
-                        value: payload_value,
-                        var_type: *var_type,
-                        data_type: None,
-                    });
-
-                    if let Some(payload_pattern) = payload_pattern {
-                        bindings.extend(Self::extract_bindings(
-                            env,
-                            scope,
-                            payload_pattern,
-                            &AstNode::member(span, value.clone(), variant),
-                        )?);
-                    }
+                if let Some(pattern) = pattern {
+                    let value = AstNode::member(span, value.clone(), variant);
+                    bindings.extend(Self::extract_bindings(env, scope, pattern, &value)?);
                 }
             }
             MatchArmType::Value(_)

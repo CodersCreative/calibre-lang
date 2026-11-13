@@ -23,7 +23,7 @@ const evens_from := fn (start : int) -> gen:<int> => {
 const main := fn => {
 	print("count up : ");
 	let mut g := count_up(0, 10);
-	for let .Some : value <- g.next() => print(value);
+	for let .Some : let value <- g.next() => print(value);
 	
 	print("evens : ");
 	let evens := fn(x for x in 20 if (x % 2) = 0);

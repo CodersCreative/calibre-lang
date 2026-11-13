@@ -13,13 +13,13 @@ impl<E, T> result:<E, T> {
 
 	@pure
 	const map := fn <U> (self : E!T, op : fn (T) -> U) -> U!E => match self {
-		.Ok : v => return ok(op(v)),
-		.Err : e => return err(e)
+		.Ok : let v => return ok(op(v)),
+		.Err : let e => return err(e)
 	};
 
 	@pure
 	const map_err := fn <F> (self : E!T, op : fn (E) -> F) -> T!F => match self {
-		.Ok : v => return ok(v),
-		.Err : e => return err(op(e))
+		.Ok : let v => return ok(v),
+		.Err : let e => return err(op(e))
 	};
 };

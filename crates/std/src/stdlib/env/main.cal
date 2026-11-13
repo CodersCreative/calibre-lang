@@ -14,7 +14,7 @@ impl Args {
 		// Fix Args.nth
 		for  => {
 			match Args.nth(idx) as! str? {
-				.Some : x => {
+				.Some : let x => {
 					out <<= x;
 					idx += 1u;
 				},

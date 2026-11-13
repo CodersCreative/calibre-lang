@@ -3,7 +3,7 @@ use crate::{
     ast::{
         Substitutable,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, DestructurePattern, VarType, functions::FunctionHeader},
+        nodes::{AstNode, VarType, functions::FunctionHeader},
         types::ParserDataType,
     },
 };
@@ -69,9 +69,6 @@ pub enum MatchArmType {
     StringPattern(Vec<MatchStringPatternPart>),
     Enum {
         value: PotentialDollarIdentifier,
-        var_type: VarType,
-        name: Option<PotentialDollarIdentifier>,
-        destructure: Option<DestructurePattern>,
         pattern: Option<Box<MatchArmType>>,
     },
     TuplePattern(Vec<MatchArmType>),
@@ -104,17 +101,8 @@ impl Substitutable for MatchArmType {
                 pattern: Box::new(pattern.substitute(subst)),
             },
             Self::In(x) => Self::In(x.substitute(subst)),
-            Self::Enum {
+            Self::Enum { value, pattern } => Self::Enum {
                 value,
-                var_type,
-                name,
-                destructure,
-                pattern,
-            } => Self::Enum {
-                value,
-                var_type,
-                name,
-                destructure,
                 pattern: pattern.map(|x| Box::new(x.substitute(subst))),
             },
             x => x,
@@ -138,9 +126,6 @@ impl MatchArmType {
             MatchArmType::At { pattern: inner, .. } => inner.has_wildcard(),
             MatchArmType::TuplePattern(items) => items.iter().any(|item| item.has_wildcard()),
             MatchArmType::ListPattern(items) => items.iter().any(|item| item.has_wildcard()),
-            MatchArmType::Enum { pattern: inner, .. } => {
-                inner.as_ref().map(|p| p.has_wildcard()).unwrap_or(false)
-            }
             _ => false,
         }
     }

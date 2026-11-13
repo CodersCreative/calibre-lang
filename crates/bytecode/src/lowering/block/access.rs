@@ -46,6 +46,7 @@ impl VMLowering for LirCall {
             .into_iter()
             .map(|arg| env.lower_node(arg, span))
             .collect();
+
         let dst = if self.returns_value {
             Some(env.alloc_reg())
         } else {

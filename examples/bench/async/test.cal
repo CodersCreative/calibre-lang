@@ -5,7 +5,7 @@ const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int
 	let mut handled := 0;
 	
 	for !jobs.closed() => {
-		if let .Some : job <- jobs.get() => {
+		if let .Some : let job <- jobs.get() => {
 			let score := job * (id + 1);
 			print("worker " & id & " got " & job & " => " & score & "\n");
 			emit results <- score;
@@ -45,7 +45,7 @@ const main := fn => {
 	let mut received := 0;
 	
 	for _ in 0..200 => {
-		if let .Some : value <- results.get() => {
+		if let .Some : let value <- results.get() => {
 			received += 1;
 			print("received " & received & " => " & value & "\n");
 		};

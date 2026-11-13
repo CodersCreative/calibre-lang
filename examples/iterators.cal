@@ -17,7 +17,7 @@ const main := fn => {
 	for  => {
 		let next := list_it.next();
 		match next {
-			.Some : value => print(value),
+			.Some : let value => print(value),
 			_ => break
 		};
 	};
@@ -28,14 +28,14 @@ const main := fn => {
 	for  => {
 		let next := range_it.next();
 		match next {
-			.Some : value => print(value),
+			.Some : let value => print(value),
 			_ => break
 		};
 	};
 	
 	print("\nFor let: ");
 	let mut counter := Counter { current : 5, end : 8 } as! gen:<int>;
-	for let .Some : value <- counter.next() => print(value);
+	for let .Some : let value <- counter.next() => print(value);
 	
 	print("\nMap: ");
 	let mapped := (list:<int>[1, 2, 3] as! gen:<int>).map(fn (x : int) -> int => return x * 2).collect();

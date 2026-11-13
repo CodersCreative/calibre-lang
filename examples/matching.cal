@@ -44,14 +44,14 @@ const main := fn => {
 
     let opt : int? = some(42);
     match opt {
-        .Some : v => print("Found value"),
+        .Some : let v => print("Found value"),
         .None => print("No value"),
     };
 
     let res : str!int = ok(200);
     match res {
-        .Ok : v => print("Success : " & v),
-        .Err : e => print("Error encountered : " & e),
+        .Ok : let v => print("Success : " & v),
+        .Err : let e => print("Error encountered : " & e),
     };
 
     let numbers := [1, 2, 3, 4];

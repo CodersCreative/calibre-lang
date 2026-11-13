@@ -16,7 +16,7 @@ const fib_gen := fn (n : int) -> gen:<int> => {
 const main := fn => {
 	let n := 30;
 	let mut it := fib_gen(n + 1);
-	for let .Some : v <- it.next() => print(v);
+	for let .Some : let v <- it.next() => print(v);
 };
 
 @bench test "fib_gen" => main();
@@ -24,6 +24,6 @@ const main := fn => {
 test "fib_gen_10" => {
 	let mut it := fib_gen(11);
 	let mut out := 0;
-	for let .Some : v <- it.next() => out := v;
+	for let .Some : let v <- it.next() => out := v;
 	assert(out := 55, "Fib 10 did not equal 55 as expected");
 };

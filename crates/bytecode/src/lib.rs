@@ -319,8 +319,24 @@ impl Display for VMBlock {
             }
         }
 
+        if !self.phis.is_empty() {
+            txt.push_str("\nPHI NODES:");
+            for phi in &self.phis {
+                txt.push_str(&format!("\n\t{}", phi));
+            }
+        }
+
         for instr in &self.instructions {
             txt.push_str(&format!("\n{};", instr));
+        }
+
+        if !self.edge_copies.is_empty() {
+            for edge in &self.edge_copies {
+                txt.push_str(&format!("\nEDGE COPIES FOR BLK {}:", edge.target.0));
+                for copy in &edge.copies {
+                    txt.push_str(&format!("\n\t{};", copy));
+                }
+            }
         }
 
         write!(f, "{}", txt.replace("\n", "\n\t"))
@@ -332,6 +348,25 @@ pub struct PhiNode {
     pub dest: Reg,
     pub sources: Vec<(BlockId, Reg)>,
     pub name: Option<VariableKey>,
+}
+
+impl Display for PhiNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "%r{} = {}{}",
+            self.dest,
+            self.name
+                .as_ref()
+                .map(|x| format!("{} ", x))
+                .unwrap_or_default(),
+            self.sources
+                .iter()
+                .map(|x| format!("{} from BLK {}", x.1, x.0.0))
+                .collect::<Box<[_]>>()
+                .join(" or ")
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

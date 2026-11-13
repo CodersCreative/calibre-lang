@@ -412,11 +412,13 @@ impl MirLowering for AstTry {
         let enum_arm = |variant: &str, name: Option<PotentialDollarIdentifier>, body| {
             (
                 MatchArmType::Enum {
-                    var_type: VarType::Immutable,
                     value: ParserText::from(variant.to_string()).into(),
-                    name,
-                    destructure: None,
-                    pattern: None,
+                    pattern: name.map(|name| {
+                        Box::new(MatchArmType::Let {
+                            var_type: VarType::Immutable,
+                            name,
+                        })
+                    }),
                 },
                 Vec::new(),
                 Box::new(body),

@@ -91,7 +91,7 @@ impl Tokenizer {
 			};
 			
 			match get_token(first) {
-				.Some : t => {
+				.Some : let t => {
 					self.increment_line_col(first);
 					let val := "" & buffer.remove(0).unwrap();
 					tokens <<= self.new_token(t, val);

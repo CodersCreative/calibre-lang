@@ -22,7 +22,7 @@ const main := fn => {
 
     let mut rolls := list:<uint>[0 for 6];
 
-	for let .Some : lst <- ch.get(timeout_ms : (ROLLS_PER_THREAD * 10) as! uint) => {
+	for let .Some : let lst <- ch.get(timeout_ms : (ROLLS_PER_THREAD * 10) as! uint) => {
         for i in 6 =>
             rolls[i]! += lst[i]!
     };

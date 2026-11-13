@@ -67,21 +67,17 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 // rest
                 just(Token::Range).map(|_| None),
                 // binding
-                choice((
-                    just(Token::Mut).map(|_| VarType::Mutable),
-                    just(Token::Const).map(|_| VarType::Constant),
-                ))
-                .or_not()
-                .then(data.dollar_ident.clone())
-                .map_with_span(|(var_type, name), span| {
-                    Some((
-                        var_type.unwrap_or(VarType::Immutable),
-                        PotentialDollarIdentifier::Identifier(ParserText::new(
-                            span,
-                            name.text().clone(),
-                        )),
-                    ))
-                }),
+                VarType::parser(())
+                    .then(data.dollar_ident.clone())
+                    .map_with_span(|(var_type, name), span| {
+                        Some((
+                            var_type,
+                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                                span,
+                                name.text().clone(),
+                            )),
+                        ))
+                    }),
             ))
             .separated_by(just(Token::Comma).padded_by(potential_new_line()))
             .allow_trailing()
@@ -263,34 +259,10 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 // .enum @
                 just(Token::Dot)
                     .ignore_then(data.dollar_ident.clone())
-                    .then(
-                        just(Token::Colon)
-                            .ignore_then(choice((
-                                DestructurePattern::parser(data.clone())
-                                    .map(|d| (None, None, Some(d))),
-                                // binding
-                                VarType::parser(())
-                                    .then(data.dollar_ident.clone())
-                                    .map(|(var_type, name)| (Some(var_type), Some(name), None)),
-                            )))
-                            .or_not(),
-                    )
-                    .then(just(Token::At).ignore_then(arm_type.clone()).or_not())
-                    .map(|((value, bind), pattern)| {
-                        let (var_type, name, destructure) = bind.unwrap_or((None, None, None));
-                        let (var_type, name) = if let (Some(vt), Some(n)) = (var_type, name) {
-                            (vt, Some(n))
-                        } else {
-                            (VarType::Immutable, None)
-                        };
-
-                        MatchArmType::Enum {
-                            value,
-                            var_type,
-                            name,
-                            destructure,
-                            pattern: pattern.map(Box::new),
-                        }
+                    .then(just(Token::Colon).ignore_then(arm_type.clone()).or_not())
+                    .map(|(value, pattern)| MatchArmType::Enum {
+                        value,
+                        pattern: pattern.map(Box::new),
                     }),
                 // is
                 just(Token::Is)
@@ -474,48 +446,17 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         })
                         .collect()
                 } else {
-                    let shared_enum_payload = values.iter().rev().find_map(|v| match &v {
-                        MatchArmType::Enum {
-                            var_type,
-                            name,
-                            destructure,
-                            pattern,
-                            ..
-                        } if var_type != &VarType::Immutable
-                            || name.is_some()
-                            || destructure.is_some()
-                            || pattern.is_some() =>
-                        {
-                            Some((
-                                *var_type,
-                                name.clone(),
-                                destructure.clone(),
-                                pattern.clone(),
-                            ))
-                        }
+                    let shared_pattern = values.iter().rev().find_map(|v| match &v {
+                        MatchArmType::Enum { pattern, .. } => pattern.clone(),
                         _ => None,
                     });
 
-                    if let Some((shared_vt, shared_name, shared_destructure, shared_pattern)) =
-                        shared_enum_payload
-                    {
+                    if let Some(shared_pattern) = shared_pattern {
                         for value in values.iter_mut() {
-                            if let MatchArmType::Enum {
-                                var_type,
-                                name,
-                                destructure,
-                                pattern,
-                                ..
-                            } = value
-                                && var_type == &VarType::Immutable
-                                && name.is_none()
-                                && destructure.is_none()
+                            if let MatchArmType::Enum { pattern, .. } = value
                                 && pattern.is_none()
                             {
-                                *var_type = shared_vt;
-                                *name = shared_name.clone();
-                                *destructure = shared_destructure.clone();
-                                *pattern = shared_pattern.clone();
+                                *pattern = Some(shared_pattern.clone());
                             }
                         }
                     }

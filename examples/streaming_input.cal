@@ -7,7 +7,7 @@ const main := fn => {
     print();
 
     stdout(">>> ");
-    for let .Some : v <- stream.next() => {
+    for let .Some : let v <- stream.next() => {
         print(v);
         stdout(">>> ");
     }
