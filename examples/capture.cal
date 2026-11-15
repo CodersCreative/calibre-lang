@@ -1,0 +1,39 @@
+type Identity:<T> := struct {
+    value : T
+};
+
+const main := fn => {
+    number_test();
+    struct_test();
+}
+
+const struct_test := fn => {
+    let mut id := Identity{ value : 10 };
+
+    let add_struct_ref := fn(id : &mut Identity:<int>, amt : int) => id.value += amt;
+    let add_ref := fn(number : &mut int, amt : int) => number.* += amt;
+    let add := fn(amt : int) => id.value += amt;
+
+    add(10);
+    add(20);
+    add_struct_ref(id.&mut, 15);
+    add_ref(id.value.&mut, 10);
+    add_ref(id.value.&mut, 5);
+
+    print("id = ", id, ", it should be equal to 70");
+}
+
+const number_test := fn => {
+    let mut num := 0;
+
+    let add_ref := fn(number : &mut int, amt : int) => number.* += amt;
+    let add := fn(amt : int) => num += amt;
+
+    add(10);
+    add(20);
+    add_ref(num.&mut, 15);
+    add_ref(num.&mut, 10);
+    add_ref(num.&mut, 5);
+
+    print("num = ", num, ", it should be equal to 60");
+}

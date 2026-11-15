@@ -1,4 +1,4 @@
-use crate::ast::{BlockId, LirBlock, LirNode, LirTerminator};
+use crate::ast::{BlockId, LirBlock, LirCapture, LirNode, LirTerminator};
 use calibre_mir::{
     ast::{MirFunctionParam, types::MirDataType},
     environment::MiddleEnvironment,
@@ -105,12 +105,14 @@ impl From<MirFunctionParam> for LirFunctionParam {
 pub struct LirFunction {
     pub name: VariableKey,
     pub params: Box<[LirFunctionParam]>,
-    pub captures: Box<[(VariableKey, MirDataType)]>,
+    pub captures: Box<[LirCapture]>,
     pub return_type: MirDataType,
     pub blocks: Box<[Option<LirBlock>]>,
     pub pure: bool,
     // Highkey probably overkill having this be a usize but it guarantees nothing goes wrong unless some idiot has over 32 args...
     pub referenced_params: usize,
+    #[serde(default)]
+    pub captured_params: usize,
     pub memo_params: usize,
     pub memo: bool,
 }

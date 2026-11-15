@@ -10,7 +10,7 @@ use crate::{
     variables::VariableStore,
 };
 use astro_float::Consts;
-use calibre_bytecode::{Reg, VMBlock, VMFunction, VMRegistry};
+use calibre_bytecode::{Reg, VMBlock, VMFunction, VMFunctionCapture, VMRegistry};
 use calibre_lir::{VariableKey, ast::BlockId};
 use calibre_parser::{
     Span,

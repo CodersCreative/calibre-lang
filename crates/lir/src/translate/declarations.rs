@@ -7,7 +7,10 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirClone, LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType, LirTerminator},
+    ast::{
+        LirCapture, LirClone, LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType,
+        LirTerminator,
+    },
     environment::{LabelContext, LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
@@ -188,21 +191,22 @@ impl LirLowering for MirFunction {
             })
             .collect();
 
-        let captures: Vec<(VariableKey, MirDataType)> = self
+        let mut seen_captures = FxHashSet::default();
+        let captures: Vec<LirCapture> = self
             .body
             .captured()
             .into_iter()
-            .filter(|x| !param_names.contains(x))
+            .filter(|x| !param_names.contains(*x))
+            .filter(|x| seen_captures.insert(VariableKey::clone(*x)))
             .map(|cap| {
-                (
-                    cap.clone(),
-                    env.env
-                        .symbols
-                        .variables
-                        .get(cap)
+                let variable = env.env.symbols.variables.get(cap);
+                LirCapture {
+                    name: cap.clone(),
+                    data_type: variable
                         .map(|v| v.data_type.clone())
                         .unwrap_or_else(|| MirDataType::Dynamic),
-                )
+                    mutable: variable.is_some_and(|v| v.var_type == VarType::Mutable),
+                }
             })
             .collect();
 
@@ -229,15 +233,19 @@ impl LirLowering for MirFunction {
         }
 
         env.counter = sub_lowerer.counter;
-        env.registry.append(sub_lowerer.registry);
 
-        let mut capture_names = Vec::with_capacity(captures.len());
-        let mut captures_for_func = Vec::with_capacity(captures.len());
-
-        for (n, t) in captures.into_iter() {
-            capture_names.push(n.clone());
-            captures_for_func.push((n, t));
+        let mut captured_params = 0;
+        for function in sub_lowerer.registry.functions.values() {
+            for capture in function.captures.iter().filter(|capture| capture.mutable) {
+                for (index, param) in self.parameters.iter().enumerate() {
+                    if param.identifier == capture.name {
+                        captured_params |= 1 << index;
+                    }
+                }
+            }
         }
+
+        env.registry.append(sub_lowerer.registry);
 
         let mut memo_params = 0;
         for (i, param) in self.parameters.iter().enumerate() {
@@ -256,11 +264,12 @@ impl LirLowering for MirFunction {
                     .map(|x| x.into())
                     .collect::<Vec<_>>()
                     .into_boxed_slice(),
-                captures: captures_for_func.into_boxed_slice(),
+                captures: captures.clone().into_boxed_slice(),
                 return_type: self.return_type,
                 blocks: sub_lowerer.blocks.into_iter().map(Some).collect(),
                 pure: self.pure,
                 referenced_params,
+                captured_params,
                 memo_params,
                 memo: self.memo,
             },
@@ -268,7 +277,7 @@ impl LirLowering for MirFunction {
 
         LirNodeType::Closure(LirClosure {
             label: internal_name,
-            captures: capture_names.into_boxed_slice(),
+            captures: captures.into_boxed_slice(),
         })
     }
 }

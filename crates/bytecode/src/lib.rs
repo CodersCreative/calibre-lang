@@ -125,13 +125,19 @@ impl From<LirFunctionParam> for VMFunctionParam {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMFunctionCapture {
+    pub name: VariableKey,
+    pub mutable: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMFunction {
     pub name: VariableKey,
     pub params: Box<[VMFunctionParam]>,
     #[serde(skip)]
     pub param_names: FxHashSet<VariableKey>,
-    pub captures: Box<[VariableKey]>,
+    pub captures: Box<[VMFunctionCapture]>,
     pub returns_value: bool,
     pub blocks: Box<[Option<VMBlock>]>,
     pub renamed: UstrMap<Ustr>,
@@ -145,6 +151,8 @@ pub struct VMFunction {
     pub memo: bool,
     pub memo_params: usize,
     pub referenced_params: usize,
+    #[serde(default)]
+    pub captured_params: usize,
 }
 
 impl VMFunction {
@@ -388,7 +396,7 @@ pub enum VMLiteral {
     Null,
     Closure {
         label: VariableKey,
-        captures: Box<[VariableKey]>,
+        captures: Box<[VMFunctionCapture]>,
     },
     ExternFunction {
         abi: Ustr,

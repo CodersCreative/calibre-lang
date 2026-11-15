@@ -81,7 +81,7 @@ impl VM {
     #[instrument(skip_all)]
     pub(crate) fn capture_values(
         &self,
-        captures: &[VariableKey],
+        captures: &[VMFunctionCapture],
         seen: &mut FxHashSet<VariableKey>,
     ) -> Vec<(VariableKey, RuntimeValue)> {
         if captures.is_empty() {
@@ -91,10 +91,21 @@ impl VM {
         let mut out = Vec::with_capacity(captures.len());
         let mut seen_names = FxHashSet::default();
 
-        for name in captures {
-            if seen_names.insert(name.clone()) {
-                out.push((name.clone(), self.capture_value(name, seen)));
+        for capture in captures {
+            let name = &capture.name;
+            if !seen_names.insert(name.clone()) {
+                continue;
             }
+
+            let value = if capture.mutable
+                && matches!(self.resolve_var_name(name.clone()), Some(VarName::Var(_)))
+            {
+                RuntimeValue::Ref(name.clone())
+            } else {
+                self.capture_value(name, seen)
+            };
+
+            out.push((name.clone(), value));
         }
 
         out

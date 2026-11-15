@@ -1,6 +1,6 @@
 use super::ssa::SSABuilder;
 use crate::{
-    EdgeCopy, Reg, VMBlock, VMFunction, VMLiteral,
+    EdgeCopy, Reg, VMBlock, VMFunction, VMFunctionCapture, VMLiteral,
     instructions::{VMInstruction, literals::VMLoadLiteral, registers::VMCopy},
     lowering::BlockLoweringCtx,
 };
@@ -27,6 +27,7 @@ impl VMFunction {
             pure: false,
             memo: false,
             referenced_params: 0,
+            captured_params: 0,
             memo_params: 0,
         };
 
@@ -56,6 +57,7 @@ impl VMFunction {
             memo: false,
             memo_params: 0,
             referenced_params: 0,
+            captured_params: 0,
         }
     }
 }
@@ -115,7 +117,10 @@ impl FunctionLowering {
                 .func
                 .captures
                 .iter()
-                .map(|(n, _)| n.clone())
+                .map(|capture| VMFunctionCapture {
+                    name: capture.name.clone(),
+                    mutable: capture.mutable,
+                })
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             returns_value: !lower.func.return_type.is_null(),
@@ -131,6 +136,7 @@ impl FunctionLowering {
             memo: lower.func.memo,
             memo_params: lower.func.memo_params,
             referenced_params: lower.func.referenced_params,
+            captured_params: lower.func.captured_params,
         }
     }
 
@@ -161,8 +167,11 @@ impl FunctionLowering {
             }
         }
 
-        let captures: FxHashSet<VariableKey> =
-            func.captures.iter().map(|(n, _)| n.clone()).collect();
+        let captures: FxHashSet<VariableKey> = func
+            .captures
+            .iter()
+            .map(|capture| capture.name.clone())
+            .collect();
 
         let param_regs: Vec<Reg> = (0..func.params.len() as Reg).collect();
         let mut reg_count = param_regs.len() as Reg;
@@ -195,7 +204,7 @@ impl FunctionLowering {
             })
             .collect();
 
-        let referenced_variables: FxHashSet<VariableKey> = func
+        let mut referenced_variables: FxHashSet<VariableKey> = func
             .blocks
             .iter()
             .flatten()
@@ -209,6 +218,12 @@ impl FunctionLowering {
                 _ => None,
             })
             .collect();
+
+        for (index, param) in func.params.iter().enumerate() {
+            if func.captured_params & (1 << index) != 0 {
+                referenced_variables.insert(param.identifier.clone());
+            }
+        }
 
         let ssa_builder = SSABuilder::new(
             block_map.clone(),

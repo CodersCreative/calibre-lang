@@ -70,9 +70,16 @@ pub struct LirSpawn {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
+pub struct LirCapture {
+    pub name: VariableKey,
+    pub data_type: MirDataType,
+    pub mutable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirClosure {
     pub label: VariableKey,
-    pub captures: Box<[VariableKey]>,
+    pub captures: Box<[LirCapture]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -332,7 +339,7 @@ impl Display for LirNodeType {
                         label,
                         captures
                             .iter()
-                            .map(|x| x.to_string())
+                            .map(|x| x.name.to_string())
                             .collect::<Vec<_>>()
                             .join(", ")
                     )

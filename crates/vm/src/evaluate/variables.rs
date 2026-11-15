@@ -77,9 +77,9 @@ impl VMEvaluation for VMStoreVar {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_variable(block, self.name)?;
+        let name = vm.local_variable(block, self.name)?.clone();
         let stored = vm.get_reg_value(self.src).clone();
-        let old = vm.variables.insert(name.clone(), stored);
+        let old = vm.variables.insert(name, stored);
 
         if let Some(old) = old
             && let Some(dst) = &self.dst

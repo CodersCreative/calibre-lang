@@ -138,6 +138,7 @@ impl CompilerData {
                 pure: false,
                 memo: false,
                 referenced_params: 0,
+                captured_params: 0,
                 memo_params: 0,
             };
 

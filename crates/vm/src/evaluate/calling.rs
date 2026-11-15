@@ -55,6 +55,14 @@ impl VM {
             if !names.insert(name.clone()) {
                 continue;
             }
+
+            if let RuntimeValue::Ref(target) = old_value
+                && target == name
+            {
+                refreshed.push((name.clone(), old_value.clone()));
+                continue;
+            }
+
             let value = self.capture_value(name, &mut seen);
             refreshed.push((
                 name.clone(),
@@ -346,8 +354,10 @@ impl VM {
         self.pop_frame();
         self.restore_captures(prev_vars);
 
-        for name in function.params.iter() {
-            self.variables.remove(&name.identifier);
+        for (index, param) in function.params.iter().enumerate() {
+            if function.captured_params & (1 << index) == 0 {
+                self.variables.remove(&param.identifier);
+            }
         }
 
         Ok(Some(result))

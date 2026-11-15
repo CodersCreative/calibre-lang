@@ -110,8 +110,8 @@ impl MirRenamable for LirNodeType {
             }
             Self::Closure(LirClosure { label, captures }) => {
                 *label = state.mapped_variable_or_original(label.clone());
-                for c in captures {
-                    *c = state.mapped_variable_or_original(c.clone());
+                for capture in captures {
+                    capture.name = state.mapped_variable_or_original(capture.name.clone());
                 }
             }
             Self::Deref(LirDeref { value }) => value.rename(state),

@@ -5,7 +5,7 @@ Closure
 */
 
 use crate::{
-    Reg, VMLiteral,
+    Reg, VMFunctionCapture, VMLiteral,
     instructions::{
         VMInstruction,
         literals::{VMLoadLiteral, VMRange},
@@ -39,7 +39,14 @@ impl VMLowering for LirClosure {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         env.block.local_literals.push(VMLiteral::Closure {
             label: self.label,
-            captures: self.captures,
+            captures: self
+                .captures
+                .into_iter()
+                .map(|capture| VMFunctionCapture {
+                    name: capture.name,
+                    mutable: capture.mutable,
+                })
+                .collect(),
         });
 
         let lit = (env.block.local_literals.len() - 1) as u16;
