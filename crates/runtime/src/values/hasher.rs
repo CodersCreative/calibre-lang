@@ -58,6 +58,7 @@ impl Hash for Value {
             Value::List(v) => unsafe { &**v }.data.hash(state),
             Value::Host(v) => unsafe { &**v }.data.hash(state),
             Value::Tuple(v) | Value::Enum(v) | Value::Struct(v) => unsafe { &**v }.data.hash(state),
+            Value::Func(v) => v.hash(state),
         }
     }
 }

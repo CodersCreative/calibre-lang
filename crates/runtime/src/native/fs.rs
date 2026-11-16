@@ -75,14 +75,11 @@ pub extern "C" fn calibre_fs_path_file_type(path: *mut GcHost) -> *mut GcAggrega
             .expect("Invalid type when downcasting host")
     };
 
-    GcAggregate {
-        field_count: 3,
-        data: vec![
-            Value::Bool(path_buf.is_file()),
-            Value::Bool(path_buf.is_dir()),
-            Value::Bool(path_buf.is_symlink()),
-        ],
-    }
+    GcAggregate::new(vec![
+        Value::Bool(path_buf.is_file()),
+        Value::Bool(path_buf.is_dir()),
+        Value::Bool(path_buf.is_symlink()),
+    ])
     .alloc()
 }
 
@@ -444,14 +441,11 @@ pub extern "C" fn calibre_fs_direntry_file_type(entry: *mut GcHost) -> *mut GcAg
     .file_type()
     {
         Ok(ft) => Value::Struct(
-            GcAggregate {
-                field_count: 3,
-                data: vec![
-                    Value::Bool(ft.is_file()),
-                    Value::Bool(ft.is_dir()),
-                    Value::Bool(ft.is_symlink()),
-                ],
-            }
+            GcAggregate::new(vec![
+                Value::Bool(ft.is_file()),
+                Value::Bool(ft.is_dir()),
+                Value::Bool(ft.is_symlink()),
+            ])
             .alloc(),
         )
         .ok(),
@@ -521,14 +515,11 @@ pub extern "C" fn calibre_fs_metadata_file_type(meta: *mut GcHost) -> *mut GcAgg
             .0
     };
 
-    GcAggregate {
-        field_count: 3,
-        data: vec![
-            Value::Bool(meta.is_file()),
-            Value::Bool(meta.is_dir()),
-            Value::Bool(meta.is_symlink()),
-        ],
-    }
+    GcAggregate::new(vec![
+        Value::Bool(meta.is_file()),
+        Value::Bool(meta.is_dir()),
+        Value::Bool(meta.is_symlink()),
+    ])
     .alloc()
 }
 

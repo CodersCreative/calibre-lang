@@ -1,7 +1,7 @@
 use crate::layout::Layouts;
 use crate::natives::{ArgumentKind, runtime_functions};
 use crate::translation::FunctionTranslator;
-use crate::values::CraneliftTypes;
+use crate::values::{CompiledValue, CraneliftTypes};
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{
     BlockId, LirAssign, LirBlock, LirLValue, LirNode, LirNodeType, LirTerminator,
@@ -40,6 +40,7 @@ pub struct CompilerData {
     globals: Globals,
     layouts: Layouts,
     runtime_functions: RuntimeFunctions,
+    function_ids: FxHashMap<VariableKey, FuncId>,
     counter: i64,
     isa: Arc<dyn isa::TargetIsa>,
 }
@@ -158,8 +159,12 @@ impl CompilerData {
             }
         }
 
-        for (key, func) in &self.registry.functions {
+        for (index, (key, func)) in self.registry.functions.iter().enumerate() {
             let mut signature = module.make_signature();
+
+            if !func.captures.is_empty() {
+                signature.params.push(AbiParam::new(types::I64));
+            }
 
             for param in func.params.iter() {
                 signature.params.push(AbiParam::new(
@@ -173,9 +178,21 @@ impl CompilerData {
                 ));
             }
 
-            let symbol_name = key.to_string();
+            let symbol_name = format!("calibre_fn_{}_{}", index, key);
             let function = module.declare_function(&symbol_name, Linkage::Export, &signature)?;
             self.functions.insert(key.clone(), function);
+        }
+
+        let mut closure_signature = module.make_signature();
+        closure_signature.call_conv = CallConv::SystemV;
+        closure_signature.params.push(AbiParam::new(types::I64));
+        closure_signature.params.push(AbiParam::new(types::I64));
+        closure_signature.returns.push(AbiParam::new(types::I64));
+
+        for (index, key) in self.registry.functions.keys().enumerate() {
+            let entry_name = format!("calibre_closure_{}_{}", index, key);
+            let entry = module.declare_function(&entry_name, Linkage::Local, &closure_signature)?;
+            self.function_ids.insert(key.clone(), entry);
         }
 
         for (key, func) in self.registry.functions.clone() {
@@ -185,6 +202,14 @@ impl CompilerData {
 
             self.context.func.signature.params.clear();
             self.context.func.signature.returns.clear();
+
+            if !func.captures.is_empty() {
+                self.context
+                    .func
+                    .signature
+                    .params
+                    .push(AbiParam::new(types::I64));
+            }
 
             for param in func.params.iter() {
                 self.context.func.signature.params.push(AbiParam::new(
@@ -214,6 +239,7 @@ impl CompilerData {
                     &mut self.counter,
                     func.return_type.clone(),
                     self.isa.clone(),
+                    &self.function_ids,
                 );
 
                 translator.translate_function(func)?;
@@ -225,6 +251,123 @@ impl CompilerData {
                     let formatted_error =
                         pretty_verifier_error(&self.context.func, None, verifier_errors);
                     return Err(format!("Verifier error:\n{}", formatted_error).into());
+                }
+                Err(x) => return Err(Box::new(x)),
+            };
+
+            module.clear_context(&mut self.context);
+        }
+
+        for (key, func) in self.registry.functions.clone() {
+            let Some(&entry_id) = self.function_ids.get(&key) else {
+                continue;
+            };
+            let Some(&real_id) = self.functions.get(&key) else {
+                continue;
+            };
+
+            self.context.func.signature.params.clear();
+            self.context.func.signature.returns.clear();
+
+            self.context
+                .func
+                .signature
+                .params
+                .push(AbiParam::new(types::I64));
+
+            self.context
+                .func
+                .signature
+                .params
+                .push(AbiParam::new(types::I64));
+
+            self.context
+                .func
+                .signature
+                .returns
+                .push(AbiParam::new(types::I64));
+
+            self.context.func.signature.call_conv = CallConv::SystemV;
+
+            let func_ref = module.declare_func_in_func(real_id, &mut self.context.func);
+
+            {
+                let builder =
+                    FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
+
+                let mut translator = FunctionTranslator::new(
+                    builder,
+                    module,
+                    &self.registry,
+                    &self.types,
+                    &mut self.layouts,
+                    &self.globals,
+                    &self.functions,
+                    &self.runtime_functions,
+                    &mut self.counter,
+                    func.return_type.clone(),
+                    self.isa.clone(),
+                    &self.function_ids,
+                );
+
+                let entry_block = translator.builder.create_block();
+
+                translator
+                    .builder
+                    .append_block_params_for_function_params(entry_block);
+
+                translator.builder.switch_to_block(entry_block);
+
+                let block_params = translator.builder.block_params(entry_block).to_vec();
+
+                let env = block_params
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| translator.int_const(0));
+
+                let args = block_params.get(1).copied().unwrap_or_else(|| env);
+
+                let mut call_args = Vec::with_capacity(func.params.len() + 1);
+                if !func.captures.is_empty() {
+                    call_args.push(env);
+                }
+
+                for (i, param) in func.params.iter().enumerate() {
+                    let index = translator.int_const(i as i64);
+                    let payload = translator
+                        .runtime_call("calibre_aggregate_get_field_and_deref", &[args, index])?;
+
+                    call_args.push(translator.convert_from_i64(payload, &param.data_type));
+                }
+
+                let call = translator.builder.ins().call(func_ref, &call_args);
+
+                let payload =
+                    if func.return_type.is_null() || func.return_type == MirDataType::Never {
+                        translator.int_const(0)
+                    } else {
+                        let results = translator.builder.inst_results(call);
+                        let result = results
+                            .first()
+                            .copied()
+                            .ok_or("expected return value from function entry".to_string())?;
+                        translator
+                            .convert_to_i64(CompiledValue::new(result, func.return_type.clone()))?
+                    };
+
+                translator.builder.ins().return_(&[payload]);
+                translator.builder.seal_all_blocks();
+
+                let frontend_config = translator.isa.frontend_config();
+                translator.builder.finalize(frontend_config);
+            }
+
+            match module.define_function(entry_id, &mut self.context) {
+                Ok(_) => {}
+                Err(ModuleError::Compilation(CodegenError::Verifier(verifier_errors))) => {
+                    let error = pretty_verifier_error(&self.context.func, None, verifier_errors);
+
+                    return Err(format!("Verifier error in entry {}:\n{}", key, error).into());
                 }
                 Err(x) => return Err(Box::new(x)),
             };
@@ -252,22 +395,26 @@ impl CompilerData {
 
             let init_globals_key = VariableKey::from("calibre_init_globals");
 
-            if let Some(&func_id) = self.functions.get(&init_globals_key) {
-                let func_ref = module.declare_func_in_func(func_id, builder.func);
-                builder.ins().call(func_ref, &[]);
-            }
+            let mut startup_functions = vec![init_globals_key];
+            startup_functions.extend(init_functions.into_iter().map(|x| x.1));
+            startup_functions.extend(fin_functions.into_iter().map(|x| x.1));
 
-            for (_, func_key) in init_functions {
+            for func_key in startup_functions {
                 if let Some(&func_id) = self.functions.get(&func_key) {
                     let func_ref = module.declare_func_in_func(func_id, builder.func);
-                    builder.ins().call(func_ref, &[]);
-                }
-            }
 
-            for (_, func_key) in fin_functions {
-                if let Some(&func_id) = self.functions.get(&func_key) {
-                    let func_ref = module.declare_func_in_func(func_id, builder.func);
-                    builder.ins().call(func_ref, &[]);
+                    let args = if self
+                        .registry
+                        .functions
+                        .get(&func_key)
+                        .is_some_and(|f| !f.captures.is_empty())
+                    {
+                        vec![builder.ins().iconst(types::I64, 0)]
+                    } else {
+                        Vec::new()
+                    };
+
+                    builder.ins().call(func_ref, &args);
                 }
             }
 
@@ -326,6 +473,7 @@ impl JitCompiler {
             layouts,
             registry,
             runtime_functions: FxHashMap::default(),
+            function_ids: FxHashMap::default(),
             counter: 1,
             isa,
         };
@@ -384,6 +532,7 @@ impl AotCompiler {
             layouts,
             registry,
             runtime_functions: FxHashMap::default(),
+            function_ids: FxHashMap::default(),
             counter: 1,
             isa,
         };

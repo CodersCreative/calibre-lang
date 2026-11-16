@@ -114,6 +114,31 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_aggregate_set_field",
             ptr: aggregate::calibre_aggregate_set_field as *const u8,
         },
+        RuntimeSymbol {
+            name: "calibre_aggregate_get_field_and_deref",
+            ptr: aggregate::calibre_aggregate_get_field_and_deref as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_aggregate_get_field",
+            ptr: aggregate::calibre_aggregate_get_field as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_aggregate_ref_get_field",
+            ptr: aggregate::calibre_aggregate_ref_get_field as *const u8,
+        },
+        // closure
+        RuntimeSymbol {
+            name: "calibre_fn_closure_new",
+            ptr: values::closure::calibre_fn_closure_new as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fn_entry",
+            ptr: values::closure::calibre_fn_entry as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_value_cell_new",
+            ptr: values::closure::calibre_value_cell_new as *const u8,
+        },
         // list
         RuntimeSymbol {
             name: "calibre_gc_alloc_list",

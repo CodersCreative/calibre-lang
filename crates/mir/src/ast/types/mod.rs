@@ -442,12 +442,23 @@ impl MirDataType {
             MirDataType::Str => 7,
             MirDataType::Char => 8,
             MirDataType::Struct { identifier, .. } if !enums.any(|x| x == identifier) => 9,
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } if identifier.name() == "gen"
+                && generic_types
+                    .first()
+                    .is_some_and(|x| x == &MirDataType::Str) =>
+            {
+                15
+            }
             MirDataType::Tuple(_) => 10,
             MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 11,
             MirDataType::List(_) => 12,
             MirDataType::Range => 13,
             MirDataType::Host => 14,
-            _ => 15,
+            MirDataType::Function { .. } => 16,
+            _ => 17,
         }
     }
 

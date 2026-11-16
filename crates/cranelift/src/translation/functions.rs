@@ -5,7 +5,9 @@ use crate::{
 };
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{LirCall, LirLoad, LirNodeType};
-use cranelift::codegen::ir::{InstBuilder, types};
+use cranelift::codegen::ir::{InstBuilder, Signature, Value, types};
+use cranelift::codegen::isa::CallConv;
+use cranelift::prelude::AbiParam;
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -15,24 +17,76 @@ impl CraneliftTranslation for LirCall {
         translator: &mut FunctionTranslator<'a, M>,
         data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        let callee_value = match *self.caller {
-            LirNodeType::Load(LirLoad { value }) => value,
-            x => {
-                return Err(format!("Call callee must be a Load, found {}", x).into());
+        let key = match &*self.caller {
+            LirNodeType::Load(LirLoad { value }) => Some(value.clone()),
+            _ => None,
+        };
+
+        let Some(key) = key else {
+            let callee = self.caller.translate(translator, None)?;
+            let mut arg_types = Vec::new();
+
+            match callee.data_type.unwrap_all_refs().clone() {
+                MirDataType::Function {
+                    parameters,
+                    return_type,
+                } => {
+                    return emit_indirect_call(
+                        translator,
+                        callee.value,
+                        parameters,
+                        *return_type,
+                        &self.args,
+                        &mut arg_types,
+                    );
+                }
+                MirDataType::Dynamic => {
+                    return emit_indirect_call(
+                        translator,
+                        callee.value,
+                        Vec::new(),
+                        MirDataType::Dynamic,
+                        &self.args,
+                        &mut arg_types,
+                    );
+                }
+                other => {
+                    return Err(
+                        format!("Call callee must be a Load or function, found {}", other).into(),
+                    );
+                }
             }
         };
 
-        let callee_str = callee_value.name().as_str();
+        let callee_str = key.name().as_str();
 
         let mut arg_types = Vec::new();
 
-        if let Some(&func_id) = translator.functions.get(&callee_value) {
+        if let Some((data_type, var)) = translator.variables.get(&key).cloned()
+            && let MirDataType::Function {
+                parameters,
+                return_type,
+            } = data_type.unwrap_all_refs().clone()
+        {
+            let closure = translator.builder.use_var(var);
+
+            return emit_indirect_call(
+                translator,
+                closure,
+                parameters,
+                *return_type,
+                &self.args,
+                &mut arg_types,
+            );
+        }
+
+        if let Some(&func_id) = translator.functions.get(&key) {
             let func_ref = translator
                 .module
                 .declare_func_in_func(func_id, translator.builder.func);
-            let function = translator.registry.functions.get(&callee_value);
+            let function = translator.registry.functions.get(&key);
 
-            let args = self
+            let mut arg_values = self
                 .args
                 .into_iter()
                 .map(|arg| {
@@ -40,9 +94,21 @@ impl CraneliftTranslation for LirCall {
                     arg_types.push(arg.data_type);
                     Ok(arg.value)
                 })
-                .collect::<Result<Box<[_]>, Box<dyn Error>>>()?;
+                .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
-            let call = translator.builder.ins().call(func_ref, &args);
+            if function.is_some_and(|f| !f.captures.is_empty()) {
+                let value = if translator.current_function.as_ref() == Some(&key)
+                    && let Some(value) = translator.self_env
+                {
+                    value
+                } else {
+                    translator.builder.ins().iconst(types::I64, 0)
+                };
+
+                arg_values.insert(0, value);
+            }
+
+            let call = translator.builder.ins().call(func_ref, &arg_values);
             let return_type = function
                 .map(|x| x.return_type.clone())
                 .or_else(|| data_type);
@@ -63,7 +129,7 @@ impl CraneliftTranslation for LirCall {
                 ))
             }
         } else if let Some(runtime_name) = {
-            if let Some(x) = translator.natives.get(&callee_value) {
+            if let Some(x) = translator.natives.get(&key) {
                 Some(*x)
             } else if runtime_functions().contains_key(callee_str) {
                 Some(callee_str)
@@ -168,7 +234,62 @@ impl CraneliftTranslation for LirCall {
 
             Ok(CompiledValue::new(result, return_type))
         } else {
-            Err(format!("Unable to find function: {}", callee_value).into())
+            Err(format!("Unable to find function: {}", key).into())
         }
     }
+}
+
+fn emit_indirect_call<'a, M: Module>(
+    translator: &mut FunctionTranslator<'a, M>,
+    closure: Value,
+    parameters: Vec<MirDataType>,
+    return_type: MirDataType,
+    args: &[LirNodeType],
+    arg_types: &mut Vec<MirDataType>,
+) -> Result<CompiledValue, Box<dyn Error>> {
+    let entry = translator.runtime_call("calibre_fn_entry", &[closure])?;
+
+    let field_count = translator.int_const(args.len() as i64);
+    let args_agg = translator.runtime_call("calibre_gc_alloc_aggregate", &[field_count])?;
+
+    for (i, arg) in args.iter().enumerate() {
+        let value = arg
+            .clone()
+            .translate(translator, parameters.get(i).cloned())?;
+        arg_types.push(value.data_type.clone());
+
+        let tag = value.data_type.type_tag(translator.registry.enums()) as i64;
+        let tag = translator.int_const(tag);
+
+        let value = translator.convert_to_i64(value)?;
+        let index = translator.int_const(i as i64);
+
+        translator.runtime_call_void(
+            "calibre_aggregate_set_field",
+            &[args_agg, index, tag, value],
+        )?;
+    }
+
+    let sig = if let Some(sig) = translator.indirect_call_sig {
+        sig
+    } else {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(types::I64));
+        sig.params.push(AbiParam::new(types::I64));
+        sig.returns.push(AbiParam::new(types::I64));
+
+        let sig = translator.builder.import_signature(sig);
+        translator.indirect_call_sig = Some(sig);
+        sig
+    };
+
+    let call = translator
+        .builder
+        .ins()
+        .call_indirect(sig, entry, &[closure, args_agg]);
+
+    let value = translator.builder.inst_results(call)[0];
+    let value = translator.convert_from_i64(value, &return_type);
+
+    Ok(CompiledValue::new(value, return_type))
 }

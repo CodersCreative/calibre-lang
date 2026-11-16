@@ -21,6 +21,17 @@ impl CraneliftTranslation for LirDeclare {
             .value
             .translate(translator, Some(self.data_type.clone()))?;
 
+        if translator.mutable_captures.contains(&self.dest) {
+            let value = translator.box_value(&self.data_type, value)?;
+
+            translator.boxed_vars.insert(
+                self.dest.clone(),
+                CompiledValue::new(value, self.data_type.clone()),
+            );
+
+            return Ok(CompiledValue::new(value, self.data_type.clone()));
+        }
+
         let ty = translator.types.to_cranelift_type(&self.data_type);
         let var = translator.builder.declare_var(ty);
 
@@ -52,8 +63,45 @@ impl CraneliftTranslation for LirAssign {
     ) -> Result<CompiledValue, Box<dyn Error>> {
         match self.dest {
             LirLValue::Var(key) => {
+                if let Some(boxed) = translator.boxed_vars.get(&key).cloned() {
+                    let value = self
+                        .value
+                        .translate(translator, Some(boxed.data_type.clone()))?;
+
+                    translator.store_boxed(boxed.clone(), value)?;
+                    return Ok(boxed);
+                }
+
                 if let Some((data_type, var)) = translator.variables.get(&key).cloned() {
                     let value = self.value.translate(translator, Some(data_type.clone()))?;
+
+                    if data_type.is_ref() && !value.data_type.is_ref() {
+                        let ptr = translator.builder.use_var(var);
+
+                        let tag = translator.builder.ins().iconst(
+                            translator.types.int(),
+                            data_type.unwrap_all_refs().type_tag(translator.registry.enums()) as i64,
+                        );
+
+                        let payload = translator.convert_to_i64(value)?;
+
+                        let func_id = translator
+                            .runtime_functions
+                            .get("calibre_set_ref")
+                            .ok_or("calibre_set_ref not found in runtime_functions")?;
+
+                        let func_ref = translator
+                            .module
+                            .declare_func_in_func(*func_id, translator.builder.func);
+
+                        translator
+                            .builder
+                            .ins()
+                            .call(func_ref, &[ptr, tag, payload]);
+
+                        return Ok(CompiledValue::new(payload, data_type));
+                    }
+
                     translator.builder.def_var(var, value.value);
                     Ok(value)
                 } else if let Some((data_type, data_id)) = translator.globals.get(&key).cloned() {

@@ -16,6 +16,7 @@ use wasm_sync::Mutex;
 pub mod aggregate;
 pub mod big;
 pub mod clone;
+pub mod closure;
 pub mod enums;
 pub mod hasher;
 pub mod host;
@@ -75,12 +76,15 @@ pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> Option<(u
     if s < 0 {
         s += len as i64;
     }
+
     if e < 0 {
         e += len as i64;
     }
+
     if s < 0 {
         s = 0;
     }
+
     if e < 0 {
         e = 0;
     }
@@ -132,6 +136,7 @@ pub enum Value {
     List(*mut GcList),
     Range(i64, i64),
     Host(*mut GcHost),
+    Func(i64),
     Reader(*mut GcReader),
     Ptr(usize),
 }
@@ -155,6 +160,7 @@ impl From<&Value> for ValueTag {
             Value::Range(_, _) => Self::Range,
             Value::Host(_) => Self::Host,
             Value::Reader(_) => Self::Reader,
+            Value::Func(_) => Self::Func,
             Value::Ptr(_) => Self::Ptr,
         }
     }
@@ -183,6 +189,7 @@ impl Value {
             }
             ValueTag::Host => Self::Host(value.cast_unsigned() as *mut GcHost),
             ValueTag::Reader => Self::Reader(value.cast_unsigned() as *mut GcReader),
+            ValueTag::Func => Self::Func(value),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
@@ -232,6 +239,7 @@ impl From<Value> for i64 {
                 let to_i32 = to as i32;
                 ((to_i32 as i64) << 32) | (from_i32 as i64 & 0xFFFFFFFF)
             }
+            Value::Func(x) => x,
             Value::Reader(x) => x as i64,
         }
     }
@@ -350,6 +358,7 @@ impl Display for Value {
             Value::Range(from, to) => {
                 write!(f, "{}..{}", from, to)
             }
+            Value::Func(_) => write!(f, "Func"),
             Value::Reader(_) => write!(f, "Reader"),
         }
     }
@@ -374,5 +383,6 @@ pub enum ValueTag {
     Range,
     Host,
     Reader,
+    Func,
     Ptr,
 }

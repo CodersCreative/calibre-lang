@@ -7,15 +7,16 @@ use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
 use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::ast::nodes::VarType;
-use cranelift::codegen::ir::FuncRef;
+use cranelift::codegen::ir::{FuncRef, SigRef};
 use cranelift::codegen::isa::TargetIsa;
 use cranelift::prelude::*;
-use cranelift_module::Module;
+use cranelift_module::{FuncId, Module};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::error::Error;
 use std::sync::Arc;
 
 pub mod access;
+pub mod flow;
 pub mod expression;
 pub mod functions;
 pub mod literals;
@@ -48,6 +49,12 @@ pub struct FunctionTranslator<'a, M: Module> {
     pub gc_managed_vars: FxHashSet<VariableKey>,
     pub return_type: MirDataType,
     pub isa: Arc<dyn TargetIsa>,
+    pub boxed_vars: FxHashMap<VariableKey, CompiledValue>,
+    pub function_ids: &'a FxHashMap<VariableKey, FuncId>,
+    pub mutable_captures: FxHashSet<VariableKey>,
+    pub indirect_call_sig: Option<SigRef>,
+    pub current_function: Option<VariableKey>,
+    pub self_env: Option<Value>,
 }
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
@@ -63,6 +70,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         counter: &'a mut i64,
         return_type: MirDataType,
         isa: Arc<dyn TargetIsa>,
+        function_ids: &'a FxHashMap<VariableKey, FuncId>,
     ) -> Self {
         let natives = build_native_mapping(registry);
 
@@ -73,6 +81,11 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             registry,
             layouts,
             variables: FxHashMap::default(),
+            boxed_vars: FxHashMap::default(),
+            mutable_captures: FxHashSet::default(),
+            indirect_call_sig: None,
+            current_function: None,
+            self_env: None,
             globals,
             functions,
             natives,
@@ -82,10 +95,91 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             memo_hash: None,
             return_type,
             isa,
+            function_ids,
         }
     }
 
+    pub fn int_const(&mut self, value: i64) -> Value {
+        self.builder.ins().iconst(self.types.int(), value)
+    }
+
+    pub fn runtime_call(&mut self, name: &str, args: &[Value]) -> Result<Value, Box<dyn Error>> {
+        let func_id = *self
+            .runtime_functions
+            .get(name)
+            .ok_or(format!("{} not found in runtime_functions", name))?;
+
+        let func_ref = self.module.declare_func_in_func(func_id, self.builder.func);
+
+        let call = self.builder.ins().call(func_ref, args);
+        let results = self.builder.inst_results(call);
+
+        results
+            .first()
+            .copied()
+            .ok_or_else(|| format!("runtime function {} returned no value", name).into())
+    }
+
+    pub fn runtime_call_void(&mut self, name: &str, args: &[Value]) -> Result<(), Box<dyn Error>> {
+        let func_id = *self
+            .runtime_functions
+            .get(name)
+            .ok_or(format!("{} not found in runtime_functions", name))?;
+
+        let func_ref = self.module.declare_func_in_func(func_id, self.builder.func);
+        self.builder.ins().call(func_ref, args);
+
+        Ok(())
+    }
+
+    pub fn box_value(
+        &mut self,
+        data_type: &MirDataType,
+        value: CompiledValue,
+    ) -> Result<Value, Box<dyn Error>> {
+        let tag = self.int_const(data_type.type_tag(self.registry.enums()) as i64);
+        let payload = self.convert_to_i64(value)?;
+
+        self.runtime_call("calibre_value_cell_new", &[tag, payload])
+    }
+
+    pub fn load_boxed(
+        &mut self,
+        cell: Value,
+        data_type: &MirDataType,
+    ) -> Result<Value, Box<dyn Error>> {
+        let payload = self.runtime_call("calibre_deref", &[cell])?;
+        Ok(self.convert_from_i64(payload, data_type))
+    }
+
+    pub fn store_boxed(
+        &mut self,
+        boxed: CompiledValue,
+        value: CompiledValue,
+    ) -> Result<(), Box<dyn Error>> {
+        let tag = self.int_const(boxed.data_type.type_tag(self.registry.enums()) as i64);
+        let payload = self.convert_to_i64(value)?;
+
+        let func_id = *self
+            .runtime_functions
+            .get("calibre_set_ref")
+            .ok_or("calibre_set_ref not found in runtime_functions")?;
+
+        let func_ref = self.module.declare_func_in_func(func_id, self.builder.func);
+
+        self.builder
+            .ins()
+            .call(func_ref, &[boxed.value, tag, payload]);
+
+        Ok(())
+    }
+
     pub fn translate_function(mut self, function: LirFunction) -> Result<(), Box<dyn Error>> {
+        self.mutable_captures = function.captures.iter().filter(|x| x.mutable).map(|x| x.name.clone()).collect();
+        self.current_function = Some(function.name.clone());
+        let has_captures = !function.captures.is_empty();
+        let param_offset = usize::from(has_captures);
+
         let block_map: FxHashMap<BlockId, Block> = function
             .blocks
             .iter()
@@ -115,19 +209,21 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             let hasher = self.builder.ins().call(new_hasher_ref, &[]);
             let hasher = self.builder.inst_results(hasher)[0];
 
-            let counter = self.builder.ins().iconst(self.types.int(), *self.counter);
+            let counter = self.int_const(*self.counter);
             *self.counter += 1;
 
             let tag = MirDataType::Int.type_tag(self.registry.enums()) as i64;
-            let tag = self.builder.ins().iconst(self.types.int(), tag);
+            let tag = self.int_const(tag);
 
             let hash_add_func = *self
                 .runtime_functions
                 .get("calibre_hash_add")
                 .ok_or("calibre_hash_add not found in runtime_functions")?;
+
             let hash_add_ref = self
                 .module
                 .declare_func_in_func(hash_add_func, self.builder.func);
+
             self.builder
                 .ins()
                 .call(hash_add_ref, &[hasher, tag, counter]);
@@ -141,7 +237,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             let cl_ty = self.types.to_cranelift_type(&param.data_type);
             let var = self.builder.declare_var(cl_ty);
 
-            if let Some(&value) = block_params.get(i) {
+            if let Some(&value) = block_params.get(i + param_offset) {
                 let value = CompiledValue::new(value, param.data_type.clone());
 
                 if function.memo
@@ -149,7 +245,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                     && (function.memo_params == 0 || (function.memo_params & (1 << i) != 0))
                 {
                     let tag = param.data_type.type_tag(self.registry.enums()) as i64;
-                    let tag = self.builder.ins().iconst(self.types.int(), tag);
+                    let tag = self.int_const(tag);
 
                     let value = self.convert_to_i64(value.clone())?;
 
@@ -178,7 +274,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                             .declare_func_in_func(*func_id, self.builder.func);
 
                         let tag = value.data_type.type_tag(self.registry.enums()) as i64;
-                        let tag = self.builder.ins().iconst(self.types.int(), tag);
+                        let tag = self.int_const(tag);
 
                         let value = self.convert_to_i64(value)?;
 
@@ -189,11 +285,88 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                         value.value
                     };
 
-                self.builder.def_var(var, value);
+                if function.captured_params & (1 << i) != 0 {
+                    let value = self.box_value(
+                        &param.data_type,
+                        CompiledValue::new(value, param.data_type.clone()),
+                    )?;
+
+                    self.boxed_vars.insert(
+                        param.identifier.clone(),
+                        CompiledValue::new(value, param.data_type.clone()),
+                    );
+                } else {
+                    self.builder.def_var(var, value);
+                }
             }
 
-            self.variables
-                .insert(param.identifier.clone(), (param.data_type.clone(), var));
+            if function.captured_params & (1 << i) == 0 {
+                self.variables
+                    .insert(param.identifier.clone(), (param.data_type.clone(), var));
+            }
+        }
+
+        if has_captures {
+            let env = block_params
+                .first()
+                .copied()
+                .unwrap_or_else(|| self.int_const(0));
+            self.self_env = Some(env);
+
+            for (i, capture) in function.captures.iter().enumerate() {
+                if !capture.mutable && self.functions.contains_key(&capture.name) {
+                    let func_id = self
+                        .function_ids
+                        .get(&capture.name)
+                        .copied()
+                        .ok_or(format!(
+                            "no uniform entry for captured function {}",
+                            capture.name
+                        ))?;
+
+                    let func_ref = self.module.declare_func_in_func(func_id, self.builder.func);
+
+                    let func_ptr = self.builder.ins().func_addr(self.types.ptr(), func_ref);
+
+                    let field_count = self.int_const(1);
+                    let closure =
+                        self.runtime_call("calibre_fn_closure_new", &[field_count, func_ptr])?;
+
+                    let cl_ty = self.types.to_cranelift_type(&capture.data_type);
+                    let var = self.builder.declare_var(cl_ty);
+
+                    self.builder.def_var(var, closure);
+                    self.variables
+                        .insert(capture.name.clone(), (capture.data_type.clone(), var));
+
+                    continue;
+                }
+
+                if self.globals.contains_key(&capture.name)
+                    || self.natives.contains_key(&capture.name)
+                {
+                    continue;
+                }
+
+                let index = self.int_const(i as i64 + 1);
+                let payload =
+                    self.runtime_call("calibre_aggregate_get_field_and_deref", &[env, index])?;
+
+                if capture.mutable {
+                    self.boxed_vars.insert(
+                        capture.name.clone(),
+                        CompiledValue::new(payload, capture.data_type.clone()),
+                    );
+                } else {
+                    let cl_ty = self.types.to_cranelift_type(&capture.data_type);
+                    let var = self.builder.declare_var(cl_ty);
+                    let value = self.convert_from_i64(payload, &capture.data_type);
+
+                    self.builder.def_var(var, value);
+                    self.variables
+                        .insert(capture.name.clone(), (capture.data_type.clone(), var));
+                }
+            }
         }
 
         if function.memo
@@ -256,7 +429,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 let zero = self.builder.ins().f64const(0.0);
                 self.builder.ins().return_(&[zero]);
             } else {
-                let zero = self.builder.ins().iconst(self.types.int(), 0);
+                let zero = self.int_const(0);
                 self.builder.ins().return_(&[zero]);
             }
         }
@@ -283,7 +456,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                     let zero = self.builder.ins().f64const(0.0);
                     self.builder.ins().return_(&[zero]);
                 } else {
-                    let zero = self.builder.ins().iconst(self.types.int(), 0);
+                    let zero = self.int_const(0);
                     self.builder.ins().return_(&[zero]);
                 }
             }
@@ -385,6 +558,7 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Binary(x) => x.translate(translator, data_type),
             LirNodeType::Comparison(x) => x.translate(translator, data_type),
             LirNodeType::Call(x) => x.translate(translator, data_type),
+            LirNodeType::Closure(x) => x.translate(translator, data_type),
             LirNodeType::As(x) => x.translate(translator, data_type),
             LirNodeType::Is(x) => x.translate(translator, data_type),
             LirNodeType::Ref(x) => x.translate(translator, data_type),

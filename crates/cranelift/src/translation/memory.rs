@@ -70,6 +70,12 @@ impl CraneliftTranslation for LirLoad {
                     unreachable!()
                 }
             }
+        } else if let Some(value) = translator.boxed_vars.get(&self.value).cloned() {
+            let data_type = value.data_type;
+            let value = translator.runtime_call("calibre_deref", &[value.value])?;
+            let value = translator.convert_from_i64(value, &data_type);
+
+            Ok(CompiledValue::new(value, data_type))
         } else if let Some((ty, var)) = translator.variables.get(&self.value).cloned() {
             let value = translator.builder.use_var(var);
 
@@ -97,6 +103,27 @@ impl CraneliftTranslation for LirLoad {
                 .load(cl_type, MachMemFlags::new(), addr, 0);
 
             Ok(CompiledValue::new(value, data_type.clone()))
+        } else if translator.functions.contains_key(&self.value) {
+            let func_id = translator
+                .function_ids
+                .get(&self.value)
+                .copied()
+                .ok_or(format!("no uniform entry for function {}", self.value))?;
+
+            let func_ref = translator
+                .module
+                .declare_func_in_func(func_id, translator.builder.func);
+
+            let func_ptr = translator
+                .builder
+                .ins()
+                .func_addr(translator.types.ptr(), func_ref);
+
+            let field_count = translator.int_const(1);
+            let closure =
+                translator.runtime_call("calibre_fn_closure_new", &[field_count, func_ptr])?;
+
+            Ok(CompiledValue::new(closure, MirDataType::Dynamic))
         } else {
             Err(format!("Unable to find variable: {}", self.value).into())
         }

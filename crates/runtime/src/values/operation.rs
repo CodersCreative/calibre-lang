@@ -490,13 +490,7 @@ impl Value {
                 let data_ref = unsafe { &*data };
                 let mut data = data_ref.data.clone();
                 data.push(self);
-                Ok(Self::Tuple(
-                    GcAggregate {
-                        data,
-                        field_count: data_ref.field_count + 1,
-                    }
-                    .alloc(),
-                ))
+                Ok(Self::Tuple(GcAggregate::new(data).alloc()))
             }
             Self::List(data) => {
                 let data = unsafe { &*data };
@@ -514,13 +508,7 @@ impl Value {
                 let data_ref = unsafe { &*data };
                 let mut data = data_ref.data.clone();
                 data.push(self);
-                Ok(Self::Tuple(
-                    GcAggregate {
-                        data,
-                        field_count: data_ref.field_count + 1,
-                    }
-                    .alloc(),
-                ))
+                Ok(Self::Tuple(GcAggregate::new(data).alloc()))
             }
             Self::List(data) => {
                 let data = unsafe { &*data };

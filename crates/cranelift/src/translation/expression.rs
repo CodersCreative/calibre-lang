@@ -151,24 +151,44 @@ impl CraneliftTranslation for LirComparison {
                 .module
                 .declare_func_in_func(*func_id, translator.builder.func);
 
-            let left_tag = left.data_type.type_tag(translator.registry.enums()) as i64;
+            let (left_ty, left_payload) = if left.data_type.is_ref() {
+                let pointee = left.data_type.unwrap_all_refs().clone();
+                let payload = translator.runtime_call("calibre_deref", &[left.value])?;
+                (pointee, payload)
+            } else {
+                (left.data_type.clone(), translator.convert_to_i64(left)?)
+            };
+
+            let left_tag = left_ty.type_tag(translator.registry.enums()) as i64;
             let left_tag = translator
                 .builder
                 .ins()
                 .iconst(translator.types.int(), left_tag);
-            let left = translator.convert_to_i64(left)?;
 
-            let right_tag = right.data_type.type_tag(translator.registry.enums()) as i64;
+            let (right_ty, right_payload) = if right.data_type.is_ref() {
+                let pointee = right.data_type.unwrap_all_refs().clone();
+                let payload = translator.runtime_call("calibre_deref", &[right.value])?;
+                (pointee, payload)
+            } else {
+                (right.data_type.clone(), translator.convert_to_i64(right)?)
+            };
+
+            let right_tag = right_ty.type_tag(translator.registry.enums()) as i64;
             let right_tag = translator
                 .builder
                 .ins()
                 .iconst(translator.types.int(), right_tag);
-            let right = translator.convert_to_i64(right)?;
 
-            let call = translator
-                .builder
-                .ins()
-                .call(func_ref, &[discriminant, left_tag, left, right_tag, right]);
+            let call = translator.builder.ins().call(
+                func_ref,
+                &[
+                    discriminant,
+                    left_tag,
+                    left_payload,
+                    right_tag,
+                    right_payload,
+                ],
+            );
 
             translator.builder.inst_results(call)[0]
         };
@@ -274,24 +294,44 @@ impl CraneliftTranslation for LirBinary {
                 .module
                 .declare_func_in_func(*func_id, translator.builder.func);
 
-            let left_tag = left.data_type.type_tag(translator.registry.enums()) as i64;
+            let (left_ty, left_payload) = if left.data_type.is_ref() {
+                let pointee = left.data_type.unwrap_all_refs().clone();
+                let payload = translator.runtime_call("calibre_deref", &[left.value])?;
+                (pointee, payload)
+            } else {
+                (left.data_type.clone(), translator.convert_to_i64(left)?)
+            };
+
+            let left_tag = left_ty.type_tag(translator.registry.enums()) as i64;
             let left_tag = translator
                 .builder
                 .ins()
                 .iconst(translator.types.int(), left_tag);
-            let left = translator.convert_to_i64(left)?;
 
-            let right_tag = right.data_type.type_tag(translator.registry.enums()) as i64;
+            let (right_ty, right_payload) = if right.data_type.is_ref() {
+                let pointee = right.data_type.unwrap_all_refs().clone();
+                let payload = translator.runtime_call("calibre_deref", &[right.value])?;
+                (pointee, payload)
+            } else {
+                (right.data_type.clone(), translator.convert_to_i64(right)?)
+            };
+
+            let right_tag = right_ty.type_tag(translator.registry.enums()) as i64;
             let right_tag = translator
                 .builder
                 .ins()
                 .iconst(translator.types.int(), right_tag);
-            let right = translator.convert_to_i64(right)?;
 
-            let call = translator
-                .builder
-                .ins()
-                .call(func_ref, &[discriminant, left_tag, left, right_tag, right]);
+            let call = translator.builder.ins().call(
+                func_ref,
+                &[
+                    discriminant,
+                    left_tag,
+                    left_payload,
+                    right_tag,
+                    right_payload,
+                ],
+            );
 
             let result = translator.builder.inst_results(call)[0];
 
@@ -318,6 +358,21 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             MirDataType::Byte => Ok(self.builder.ins().sextend(types::I64, value.value)),
             MirDataType::Char => Ok(self.builder.ins().sextend(types::I64, value.value)),
             _ => Ok(value.value),
+        }
+    }
+
+    pub fn convert_from_i64(&mut self, value: Value, data_type: &MirDataType) -> Value {
+        match data_type {
+            MirDataType::Float => {
+                self.builder
+                    .ins()
+                    .bitcast(self.types.float(), MachMemFlags::new(), value)
+            }
+            MirDataType::Bool | MirDataType::Byte => {
+                self.builder.ins().ireduce(self.types.bool(), value)
+            }
+            MirDataType::Char => self.builder.ins().ireduce(self.types.char(), value),
+            _ => value,
         }
     }
 }

@@ -86,6 +86,72 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_aggregate_get_field_and_deref",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_aggregate_get_field",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Ref(
+                        Box::new(MirDataType::Dynamic),
+                        RefMutability::MutRef,
+                    )),
+                },
+            ),
+            (
+                "calibre_aggregate_ref_get_field",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Ref(
+                        Box::new(MirDataType::Dynamic),
+                        RefMutability::MutRef,
+                    )),
+                },
+            ),
+            (
+                "calibre_fn_closure_new",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_fn_entry",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_value_cell_new",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
                 "calibre_deref",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],

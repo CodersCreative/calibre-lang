@@ -4,7 +4,9 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType,
-    ast::{LirDeref, LirDiscriminant, LirIndex, LirMember, LirRef, LirRefLoad},
+    ast::{
+        LirDeref, LirDiscriminant, LirIndex, LirLoad, LirMember, LirNodeType, LirRef, LirRefLoad,
+    },
     environment::LirType,
 };
 use calibre_parser::ast::RefMutability;
@@ -92,17 +94,7 @@ impl CraneliftTranslation for LirMember {
                 "calibre_enum_get"
             };
 
-            let func_id = translator
-                .runtime_functions
-                .get(runtime_name)
-                .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
-
-            let func_ref = translator
-                .module
-                .declare_func_in_func(*func_id, translator.builder.func);
-
-            let call = translator.builder.ins().call(func_ref, &[base.value]);
-            let result = translator.builder.inst_results(call)[0];
+            let result = translator.runtime_call(runtime_name, &[base.value])?;
 
             Ok(CompiledValue::new(
                 result,
@@ -149,22 +141,13 @@ impl CraneliftTranslation for LirMember {
             }
         } else {
             let runtime_name = if matches!(base.data_type, MirDataType::Ref(_, _)) {
-                "calibre_enum_ref_get"
+                "calibre_aggregate_ref_get_field"
             } else {
-                "calibre_enum_get"
+                "calibre_aggregate_get_field"
             };
 
-            let func_id = translator
-                .runtime_functions
-                .get(runtime_name)
-                .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
-
-            let func_ref = translator
-                .module
-                .declare_func_in_func(*func_id, translator.builder.func);
-
-            let call = translator.builder.ins().call(func_ref, &[base.value]);
-            let result = translator.builder.inst_results(call)[0];
+            let index = translator.int_const(index as i64);
+            let result = translator.runtime_call(runtime_name, &[base.value, index])?;
 
             Ok(CompiledValue::new(
                 result,
@@ -289,6 +272,30 @@ impl CraneliftTranslation for LirRef {
         translator: &mut FunctionTranslator<'a, M>,
         data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
+        let key = match &*self.value {
+            LirNodeType::Load(LirLoad { value }) | LirNodeType::RefLoad(LirRefLoad { value }) => {
+                Some(value.clone())
+            }
+            _ => None,
+        };
+
+        if let Some(key) = key
+            && let Some(value) = translator.boxed_vars.get(&key).cloned()
+        {
+            let mutability = match &data_type {
+                Some(MirDataType::Ref(_, m)) => *m,
+                _ => RefMutability::MutRef,
+            };
+
+            return Ok(CompiledValue::new(
+                value.value,
+                MirDataType::Ref(
+                    Box::new(value.data_type.unwrap_all_refs().clone()),
+                    mutability,
+                ),
+            ));
+        }
+
         // TODO Get a pointer
         let value = self
             .value
@@ -301,9 +308,24 @@ impl CraneliftTranslation for LirRefLoad {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Get a pointer
+        if let Some(value) = translator.boxed_vars.get(&self.value).cloned() {
+            let mutability = match &data_type {
+                Some(MirDataType::Ref(_, m)) => *m,
+                _ => RefMutability::MutRef,
+            };
+
+            return Ok(CompiledValue::new(
+                value.value,
+                MirDataType::Ref(
+                    Box::new(value.data_type.unwrap_all_refs().clone()),
+                    mutability,
+                ),
+            ));
+        }
+
         if let Some((data_type, var)) = translator.variables.get(&self.value) {
             let value = translator.builder.use_var(*var);
             Ok(CompiledValue::new(value, data_type.clone()))

@@ -1,7 +1,4 @@
-use crate::{
-    gc::calibre_gc_add_root,
-    values::{GcObject, Value, ValueTag, aggregate::GcAggregate, register_alloc},
-};
+use crate::values::{Value, ValueTag, aggregate::GcAggregate};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_gc_alloc_enum(
@@ -11,24 +8,7 @@ pub extern "C" fn calibre_gc_alloc_enum(
 ) -> *mut GcAggregate {
     let variant = Value::Int(variant);
     let value = Value::from_tag(tag, payload);
-
-    let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count: 2,
-        data: vec![variant, value],
-    }));
-
-    unsafe {
-        let object = &mut (*header).inner;
-
-        let ptr = object as *mut GcObject as usize;
-        calibre_gc_add_root(ptr);
-
-        if let GcObject::Aggregate(value) = object {
-            value as *mut GcAggregate
-        } else {
-            std::ptr::null_mut()
-        }
-    }
+    GcAggregate::new(vec![variant, value]).alloc()
 }
 
 #[unsafe(no_mangle)]

@@ -27,6 +27,13 @@ impl GcAggregate {
             }
         }
     }
+
+    pub fn new(data: Vec<Value>) -> Self {
+        GcAggregate {
+            field_count: data.len(),
+            data,
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -43,26 +50,70 @@ pub extern "C" fn calibre_aggregate_deep_clone(agg: *mut GcAggregate) -> *mut Gc
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_gc_alloc_aggregate(field_count: usize) -> *mut GcAggregate {
+pub extern "C" fn calibre_gc_alloc_aggregate(field_count: u64) -> *mut GcAggregate {
     GcAggregate {
-        field_count,
-        data: vec![Value::Null; field_count],
+        field_count: field_count as usize,
+        data: vec![Value::Null; field_count as usize],
     }
     .alloc()
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn calibre_aggregate_get_field_and_deref(agg: *mut GcAggregate, index: u64) -> i64 {
+    if agg.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        i64::from(
+            (&(*agg).data)
+                .get(index as usize)
+                .cloned()
+                .unwrap_or(Value::Null),
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_aggregate_get_field(agg: *mut GcAggregate, index: u64) -> *mut Value {
+    if agg.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        match (&mut (*agg).data).get_mut(index as usize) {
+            Some(value) => value as *mut Value,
+            None => std::ptr::null_mut(),
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_aggregate_ref_get_field(val: *mut Value, index: u64) -> *mut Value {
+    if val.is_null() {
+        return val;
+    }
+
+    match unsafe { &mut (*val) } {
+        Value::Struct(x) | Value::Tuple(x) | Value::Enum(x) => {
+            calibre_aggregate_get_field(*x, index)
+        }
+        _ => val,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn calibre_aggregate_set_field(
     agg: *mut GcAggregate,
-    index: usize,
+    index: u64,
     tag: ValueTag,
     payload: i64,
 ) {
     unsafe {
         if !agg.is_null() {
             let data = (*agg).data.as_mut_ptr();
-            if index < (*agg).data.len() {
-                *data.add(index) = Value::from_tag(tag, payload);
+            if (index as usize) < (*agg).data.len() {
+                *data.add(index as usize) = Value::from_tag(tag, payload);
             }
         }
     }
