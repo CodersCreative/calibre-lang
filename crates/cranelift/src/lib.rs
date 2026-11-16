@@ -19,6 +19,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module, ModuleError};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use rustc_hash::FxHashMap;
+use std::env;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -300,6 +301,7 @@ impl JitCompiler {
         registry: LirRegistry,
         init_functions: Vec<(i32, VariableKey)>,
         fin_functions: Vec<(i32, VariableKey)>,
+        mut args: Vec<String>,
     ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
         let mut builder =
@@ -328,6 +330,10 @@ impl JitCompiler {
             counter: 1,
             isa,
         };
+
+        if let Ok(mut x) = calibre_runtime::native::env::PROGRAM_ARGS.lock() {
+            x.append(&mut args);
+        }
 
         data.compile(&mut module, init_functions, fin_functions)?;
 
@@ -382,6 +388,10 @@ impl AotCompiler {
             counter: 1,
             isa,
         };
+
+        if let Ok(mut x) = calibre_runtime::native::env::PROGRAM_ARGS.lock() {
+            *x = env::args().skip(1).collect();
+        }
 
         data.compile(&mut module, init_functions, fin_functions)?;
 

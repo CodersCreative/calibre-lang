@@ -202,6 +202,26 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         },
         // native env
         RuntimeSymbol {
+            name: "calibre_env_get_all",
+            ptr: native::env::calibre_env_get_all as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_env_get",
+            ptr: native::env::calibre_env_get as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_env_var",
+            ptr: native::env::calibre_env_var as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_env_set_var",
+            ptr: native::env::calibre_env_set_var as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_env_remove_var",
+            ptr: native::env::calibre_env_remove_var as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_env_vars",
             ptr: native::env::calibre_env_vars as *const u8,
         },

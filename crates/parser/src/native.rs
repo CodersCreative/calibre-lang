@@ -171,6 +171,11 @@ impl ParserDataType {
                     ParserInnerType::Char,
                 ),
                 (
+                    "env.get_all",
+                    vec![],
+                    ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Str))),
+                ),
+                (
                     "env.get",
                     vec![ParserInnerType::UInt],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),

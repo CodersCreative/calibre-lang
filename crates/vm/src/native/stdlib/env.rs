@@ -34,6 +34,25 @@ impl NativeFunction for EnvGet {
     }
 }
 
+pub struct EnvGetAll;
+
+impl NativeFunction for EnvGetAll {
+    fn name(&self) -> String {
+        String::from("env.get_all")
+    }
+
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[0])?;
+
+        Ok(RuntimeValue::List(GcVec(
+            env.program_args()
+                .iter()
+                .map(|x| ValueSlot::new(RuntimeValue::Str(*x)))
+                .collect(),
+        )))
+    }
+}
+
 pub struct EnvVar;
 
 impl NativeFunction for EnvVar {

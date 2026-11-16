@@ -6,24 +6,7 @@ impl Args {
 	const nth := fn (idx : uint) -> str? => return get(idx);
 
 	@pure
-	const all := fn -> list:<str> => {
-		let mut out : list:<str> = list:<str>[];
-		
-		let mut idx := 0u;
-		
-		// Fix Args.nth
-		for  => {
-			match Args.nth(idx) as! str? {
-				.Some : let x => {
-					out <<= x;
-					idx += 1u;
-				},
-				.None => break
-			};
-		};
-		
-		return out;
-	};
+	const all := fn -> list:<str> => return get_all();
 
 	@pure
 	const count := fn -> uint => {

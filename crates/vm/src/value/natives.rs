@@ -49,6 +49,7 @@ impl RuntimeValue {
                 ("str.ends_with", Arc::new(stdlib::str::StrEndsWith)),
                 ("str.char_lowercase", Arc::new(stdlib::str::CharLowercase)),
                 ("str.char_uppercase", Arc::new(stdlib::str::CharUppercase)),
+                ("env.get_all", Arc::new(stdlib::env::EnvGetAll)),
                 ("env.get", Arc::new(stdlib::env::EnvGet)),
                 ("env.var", Arc::new(stdlib::env::EnvVar)),
                 ("env.set_var", Arc::new(stdlib::env::EnvSetVar)),

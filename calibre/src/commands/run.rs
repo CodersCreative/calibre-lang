@@ -224,6 +224,7 @@ impl RunSource {
                     artifacts.lir.data,
                     artifacts.init_functions,
                     artifacts.fin_functions,
+                    self.program_args,
                 )?;
 
                 if self.time {

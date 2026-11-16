@@ -1,0 +1,5 @@
+import Args from std::env;
+
+const main := fn => {
+    print(Args.all() as! str);
+}

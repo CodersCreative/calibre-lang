@@ -442,6 +442,60 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             ),
             // env
             (
+                "calibre_env_get_all",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_env_get",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_env_var",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_env_set_var",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_env_remove_var",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_env_vars",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Tuple(vec![
+                        MirDataType::Str,
+                        MirDataType::Str,
+                    ])))),
+                },
+            ),
+            (
                 "calibre_env_vars",
                 RuntimeFunction {
                     params: Vec::new(),
@@ -1064,6 +1118,11 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("min_or_zero", "calibre_min_or_zero"),
             ("gen_suspend", "calibre_gen_suspend"),
             // env
+            ("env.get_all", "calibre_env_get_all"),
+            ("env.get", "calibre_env_get"),
+            ("env.var", "calibre_env_var"),
+            ("env.set_var", "calibre_env_set_var"),
+            ("env.remove_var", "calibre_env_remove_var"),
             ("env.vars", "calibre_env_vars"),
             // str
             ("str.split", "calibre_str_split"),
