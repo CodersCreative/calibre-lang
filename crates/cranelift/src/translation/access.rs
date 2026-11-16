@@ -111,6 +111,42 @@ impl CraneliftTranslation for LirMember {
                     RefMutability::MutRef,
                 )),
             ))
+        } else if let MirDataType::Struct {
+            identifier,
+            generic_types,
+        } = base.data_type.unwrap_all_refs()
+            && identifier.name() == "gen"
+            && generic_types
+                .first()
+                .is_some_and(|x| x == &MirDataType::Str)
+            && (member == "gen_next" || member == "next")
+        {
+            match member {
+                "gen_next" | "next" => {
+                    let func_id = translator
+                        .runtime_functions
+                        .get("calibre_reader_next")
+                        .ok_or(String::from(
+                            "calibre_reader_next not found in runtime_functions",
+                        ))?;
+
+                    let func_ref = translator
+                        .module
+                        .declare_func_in_func(*func_id, translator.builder.func);
+
+                    let call = translator.builder.ins().call(func_ref, &[base.value]);
+                    let result = translator.builder.inst_results(call)[0];
+
+                    Ok(CompiledValue::new(
+                        result,
+                        MirDataType::Option(Box::new(MirDataType::Str)),
+                    ))
+                }
+                _ => Ok(CompiledValue {
+                    value: translator.builder.ins().iconst(translator.types.bool(), 0),
+                    data_type: MirDataType::Bool,
+                }),
+            }
         } else {
             let runtime_name = if matches!(base.data_type, MirDataType::Ref(_, _)) {
                 "calibre_enum_ref_get"
@@ -174,7 +210,7 @@ impl CraneliftTranslation for LirIndex {
             MirDataType::Range => "calibre_range_index",
             MirDataType::Str if is_slice => "calibre_string_slice",
             MirDataType::Str => "calibre_string_index",
-            x => unimplemented!("{}", x),
+            x => unimplemented!("slicing a {}", x),
         };
 
         let func_id = translator

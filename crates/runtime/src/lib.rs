@@ -1,6 +1,6 @@
 use crate::{
     native::fs,
-    values::{aggregate, big, clone, enums, hasher, list, operation, range, string},
+    values::{aggregate, big, clone, enums, hasher, list, operation, range, reader, string},
 };
 use astro_float::RoundingMode;
 
@@ -69,6 +69,11 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_gc_alloc_big",
             ptr: big::calibre_gc_alloc_big as *const u8,
+        },
+        // reader
+        RuntimeSymbol {
+            name: "calibre_reader_next",
+            ptr: reader::calibre_reader_next as *const u8,
         },
         // range
         RuntimeSymbol {
@@ -199,6 +204,11 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_wait",
             ptr: native::calibre_wait as *const u8,
+        },
+        // native console
+        RuntimeSymbol {
+            name: "calibre_console_input_stream",
+            ptr: native::console::calibre_console_input_stream as *const u8,
         },
         // native env
         RuntimeSymbol {
@@ -449,6 +459,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_fs_file_read_all",
             ptr: fs::calibre_fs_file_read_all as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_stream_lines",
+            ptr: fs::calibre_fs_file_stream_lines as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_fs_file_flush",

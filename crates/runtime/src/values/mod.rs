@@ -5,6 +5,7 @@ use crate::{
         enums::{calibre_option_some, calibre_result_err, calibre_result_ok},
         host::GcHost,
         list::GcList,
+        reader::GcReader,
         string::GcString,
     },
 };
@@ -21,6 +22,7 @@ pub mod host;
 pub mod list;
 pub mod operation;
 pub mod range;
+pub mod reader;
 pub mod string;
 
 pub static BIG_CONSTS: LazyLock<Mutex<Consts>> =
@@ -28,6 +30,7 @@ pub static BIG_CONSTS: LazyLock<Mutex<Consts>> =
 
 pub enum GcObject {
     Hasher(Box<dyn Hasher>),
+    Reader(GcReader),
     Host(GcHost),
     Big(BigFloat),
     List(GcList),
@@ -120,7 +123,6 @@ pub enum Value {
     UInt(u64),
     Byte(u8),
     Float(f64),
-    // TODO Implement big currently just being treated a ptr
     Big(*mut BigFloat),
     String(*mut GcString),
     Char(u32),
@@ -130,6 +132,7 @@ pub enum Value {
     List(*mut GcList),
     Range(i64, i64),
     Host(*mut GcHost),
+    Reader(*mut GcReader),
     Ptr(usize),
 }
 
@@ -151,6 +154,7 @@ impl From<&Value> for ValueTag {
             Value::List(_) => Self::List,
             Value::Range(_, _) => Self::Range,
             Value::Host(_) => Self::Host,
+            Value::Reader(_) => Self::Reader,
             Value::Ptr(_) => Self::Ptr,
         }
     }
@@ -178,6 +182,7 @@ impl Value {
                 Self::Range(from, to)
             }
             ValueTag::Host => Self::Host(value.cast_unsigned() as *mut GcHost),
+            ValueTag::Reader => Self::Reader(value.cast_unsigned() as *mut GcReader),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
@@ -227,6 +232,7 @@ impl From<Value> for i64 {
                 let to_i32 = to as i32;
                 ((to_i32 as i64) << 32) | (from_i32 as i64 & 0xFFFFFFFF)
             }
+            Value::Reader(x) => x as i64,
         }
     }
 }
@@ -344,6 +350,7 @@ impl Display for Value {
             Value::Range(from, to) => {
                 write!(f, "{}..{}", from, to)
             }
+            Value::Reader(_) => write!(f, "Reader"),
         }
     }
 }
@@ -366,5 +373,6 @@ pub enum ValueTag {
     List,
     Range,
     Host,
+    Reader,
     Ptr,
 }

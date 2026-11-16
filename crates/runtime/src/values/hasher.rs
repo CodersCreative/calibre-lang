@@ -45,6 +45,7 @@ impl Hash for Value {
             Value::UInt(v) => v.hash(state),
             Value::Byte(v) => v.hash(state),
             Value::Bool(v) => v.hash(state),
+            Value::Reader(_) => {}
             Value::Char(v) => v.hash(state),
             Value::String(v) => unsafe { &**v }.data.hash(state),
             Value::Float(v) => v.to_bits().hash(state),

@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+pub mod console;
 pub mod crypto;
 pub mod env;
 pub mod fs;
@@ -84,7 +85,8 @@ pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
         | Value::Bool(_)
         | Value::Big(_)
         | Value::Enum(_)
-        | Value::Host(_) => 0,
+        | Value::Host(_)
+        | Value::Reader(_) => 0,
     }
 }
 

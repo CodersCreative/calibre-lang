@@ -401,7 +401,7 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Range(x) => x.translate(translator, data_type),
             LirNodeType::Index(x) => x.translate(translator, data_type),
             x => {
-                unimplemented!("{}", x)
+                unimplemented!("executing {}", x)
             }
         }
     }

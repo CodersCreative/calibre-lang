@@ -1,8 +1,11 @@
-use calibre_lir::{Key, MirDataType, TypeKey, VariableKey, environment::LirRegistry};
+use calibre_lir::{
+    FullyQualifiedPath, Key, MirDataType, TypeKey, VariableKey, environment::LirRegistry,
+};
 use calibre_parser::ast::RefMutability;
 use cranelift::prelude::*;
 use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
+use ustr::Ustr;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ArgumentKind {
@@ -52,6 +55,14 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Big),
+                },
+            ),
+            (
+                "calibre_reader_next",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
                 },
             ),
             (
@@ -438,6 +449,23 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            // console
+            (
+                "calibre_console_input_stream",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Struct {
+                        identifier: TypeKey {
+                            fully_qualified_path: FullyQualifiedPath::combine(
+                                None,
+                                Ustr::from("gen"),
+                            ),
+                        },
+                        generic_types: vec![MirDataType::Str],
+                    }),
                 },
             ),
             // env
@@ -1041,6 +1069,22 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_fs_file_stream_lines",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Struct {
+                        identifier: TypeKey {
+                            fully_qualified_path: FullyQualifiedPath::combine(
+                                None,
+                                Ustr::from("gen"),
+                            ),
+                        },
+                        generic_types: vec![MirDataType::Str],
+                    }),
+                },
+            ),
+            (
                 "calibre_fs_file_flush",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
@@ -1117,6 +1161,8 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("len", "calibre_len"),
             ("min_or_zero", "calibre_min_or_zero"),
             ("gen_suspend", "calibre_gen_suspend"),
+            // console
+            ("console.input_stream", "calibre_console_input_stream"),
             // env
             ("env.get_all", "calibre_env_get_all"),
             ("env.get", "calibre_env_get"),
@@ -1183,6 +1229,7 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("fs.file_write", "calibre_fs_file_write"),
             ("fs.file_write_line", "calibre_fs_file_write_line"),
             ("fs.file_read_all", "calibre_fs_file_read_all"),
+            ("fs.file_stream_lines", "calibre_fs_file_stream_lines"),
             ("fs.file_flush", "calibre_fs_file_flush"),
             ("fs.dir_create", "calibre_fs_dir_create"),
             ("fs.dir_create_all", "calibre_fs_dir_create_all"),

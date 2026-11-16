@@ -1,11 +1,11 @@
 use crate::values::{
     Value, aggregate::GcAggregate, enums::calibre_option_none, host::GcHost, list::GcList,
-    string::GcString,
+    reader::GcReader, string::GcString,
 };
 use std::{
     fs::{DirEntry, File, Metadata, OpenOptions},
     hash::{Hash, Hasher},
-    io::{Read, Write},
+    io::{BufReader, Read, Write},
     path::PathBuf,
     time::Duration,
 };
@@ -900,6 +900,26 @@ pub extern "C" fn calibre_fs_file_read_all(file: *mut GcHost) -> *mut GcAggregat
         )
         .err(),
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_fs_file_stream_lines(file: *mut GcHost) -> *mut GcReader {
+    if file.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let file = unsafe {
+        (*file)
+            .data
+            .as_any_mut()
+            .downcast_mut::<HostFile>()
+            .expect("Invalid type when downcasting host")
+    }
+    .0
+    .try_clone()
+    .expect("Failed to clone file");
+
+    GcReader(Box::new(BufReader::new(file))).alloc()
 }
 
 #[unsafe(no_mangle)]

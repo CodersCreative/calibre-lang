@@ -97,18 +97,20 @@ impl VMEvaluation for VMLoadMember {
                     }));
                 }
             },
-            RuntimeValue::Reader(x) if member == "gen_next" => {
-                vm.set_reg_value(
-                    self.dst,
-                    RuntimeValue::Option(x.0.lock().ok().and_then(|mut x| {
+            RuntimeValue::Reader(reader) => match member.as_str() {
+                "gen_next" | "next" => {
+                    RuntimeValue::Option(reader.0.lock().ok().and_then(|mut x| {
                         let mut txt = String::new();
                         x.read_line(&mut txt)
                             .ok()
                             .map(|_| ValueSlot::new(RuntimeValue::Str(Ustr::from(&txt))))
-                    })),
-                );
-                return Ok(TerminateValue::None);
-            }
+                    }))
+                }
+                "done" => RuntimeValue::Bool(false),
+                _ => {
+                    return Err(missing(RuntimeValue::Reader(reader)));
+                }
+            },
             RuntimeValue::Aggregate(None, map) => {
                 let idx = tuple_index
                     .and_then(|i| normalize_index(map.as_ref().0.0.len(), i))
