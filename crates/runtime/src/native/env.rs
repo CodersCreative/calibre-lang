@@ -1,10 +1,11 @@
 use crate::values::{
     Value, aggregate::GcAggregate, enums::calibre_option_none, list::GcList, string::GcString,
 };
-use std::sync::LazyLock;
+use std::{env, sync::LazyLock};
 use wasm_sync::Mutex;
 
-pub static PROGRAM_ARGS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+pub static PROGRAM_ARGS: LazyLock<Mutex<Vec<String>>> =
+    LazyLock::new(|| Mutex::new(env::args().skip(1).collect()));
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_env_get_all() -> *mut GcList {
