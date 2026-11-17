@@ -16,8 +16,8 @@ use std::error::Error;
 use std::sync::Arc;
 
 pub mod access;
-pub mod flow;
 pub mod expression;
+pub mod flow;
 pub mod functions;
 pub mod literals;
 pub mod memory;
@@ -175,7 +175,29 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
     }
 
     pub fn translate_function(mut self, function: LirFunction) -> Result<(), Box<dyn Error>> {
-        self.mutable_captures = function.captures.iter().filter(|x| x.mutable).map(|x| x.name.clone()).collect();
+        let local_names: FxHashSet<VariableKey> = function
+            .blocks
+            .iter()
+            .flatten()
+            .map(|block| {
+                block
+                    .instructions
+                    .iter()
+                    .filter_map(|node| node.node_type.local_name().cloned())
+            })
+            .flatten()
+            .collect();
+
+        self.mutable_captures = self
+            .registry
+            .functions
+            .values()
+            .flat_map(|f| f.captures.iter())
+            .filter(|c| c.mutable)
+            .map(|c| c.name.clone())
+            .filter(|name| local_names.contains(name))
+            .collect();
+
         self.current_function = Some(function.name.clone());
         let has_captures = !function.captures.is_empty();
         let param_offset = usize::from(has_captures);

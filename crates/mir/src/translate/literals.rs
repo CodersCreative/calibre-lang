@@ -27,6 +27,7 @@ use calibre_parser::{
         },
     },
 };
+use rustc_hash::FxHashMap;
 use tracing::instrument;
 use ustr::{Ustr, UstrSet};
 
@@ -81,7 +82,7 @@ impl MirLowering for AstStruct {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = if let Some(ident) = self.identifier {
+        let mut identifier = if let Some(ident) = self.identifier {
             let resolved = env.resolve_to_data_type(scope, &ident)?;
 
             match resolved.unwrap_all_refs() {
@@ -137,7 +138,19 @@ impl MirLowering for AstStruct {
             }
         };
 
+        let template_key = MirDataType::Struct {
+            identifier: identifier.clone(),
+            generic_types: Vec::new(),
+        };
+
+        let template = env
+            .monomorphizer
+            .generic_type_templates
+            .get(&template_key)
+            .cloned();
+
         let obj = env.typing.objects.get(&identifier).cloned();
+        let mut field_types: Vec<(Ustr, MirDataType)> = Vec::new();
 
         let value = match self.value {
             ObjectType::Map(x) => {
@@ -202,6 +215,12 @@ impl MirLowering for AstStruct {
                         )?;
                     }
 
+                    if template.is_some()
+                        && let Some(field_ty) = item.mir_type_of(env, scope, item_span)
+                    {
+                        field_types.push((itm.0, field_ty));
+                    }
+
                     map.push((itm.0, item));
                 }
 
@@ -237,12 +256,66 @@ impl MirLowering for AstStruct {
                         )?;
                     }
 
+                    if template.is_some()
+                        && let Some(field_ty) = item.mir_type_of(env, scope, item_span)
+                    {
+                        field_types.push((Ustr::from(&field_name), field_ty));
+                    }
+
                     map.push((Ustr::from(&idx.to_string()), item));
                 }
 
                 map
             }
         };
+
+        if let Some(template) = template
+            && let MiddleTypeDefType::Struct(fields) =
+                MiddleTypeDefType::from_type_def_type(env, scope, template.type_def.clone())
+        {
+            let mut subst = FxHashMap::default();
+
+            for (name, data_type) in &field_types {
+                if let Some((_, (pattern, _))) =
+                    fields.0.iter().find(|(field_name, _)| field_name == name)
+                {
+                    env.unify_types(scope, pattern, data_type, &template.generic_params, &mut subst)?;
+                }
+            }
+
+            let concrete_args = template
+                .generic_params
+                .iter()
+                .map(|param| {
+                    let arg = subst.get(param.as_str()).cloned().ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::CannotInferFromExpression(format!(
+                                "generic parameter {}",
+                                param
+                            ))),
+                        )
+                    })?;
+
+                    Ok(arg)
+                })
+                .collect::<Result<Vec<_>, MiddleErr>>()?;
+
+            let ty = MirDataType::Struct {
+                identifier: identifier.clone(),
+                generic_types: Vec::new(),
+            };
+
+            identifier = match env.monomorphize_type(scope, ty, concrete_args)? {
+                MirDataType::Struct { identifier, .. } => identifier,
+                other => {
+                    return Err(MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::CannotInferFromExpression(other.to_string())),
+                    ));
+                }
+            };
+        }
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::AggregateExpression(MirAggregate {

@@ -80,7 +80,10 @@ impl CraneliftTranslation for LirAssign {
 
                         let tag = translator.builder.ins().iconst(
                             translator.types.int(),
-                            data_type.unwrap_all_refs().type_tag(translator.registry.enums()) as i64,
+                            data_type
+                                .unwrap_all_refs()
+                                .type_tag(translator.registry.enums())
+                                as i64,
                         );
 
                         let payload = translator.convert_to_i64(value)?;

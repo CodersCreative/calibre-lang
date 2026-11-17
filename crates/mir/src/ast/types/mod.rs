@@ -680,9 +680,14 @@ impl MirDataType {
                 MirDataType::Struct { identifier: y, .. },
             ) => {
                 // God I need to remove this eventually
-                x.name() == y.name()
-                    || USUAL_GENERICS.contains(&x.name().as_str())
-                    || USUAL_GENERICS.contains(&y.name().as_str())
+                let xn = x.name();
+                let yn = y.name();
+
+                xn == yn
+                    || xn.as_str().starts_with(&format!("{}_", yn.as_str()))
+                    || yn.as_str().starts_with(&format!("{}_", xn.as_str()))
+                    || USUAL_GENERICS.contains(&xn.as_str())
+                    || USUAL_GENERICS.contains(&yn.as_str())
             }
             (MirDataType::Struct { identifier: x, .. }, _) => {
                 USUAL_GENERICS.contains(&x.name().as_str())

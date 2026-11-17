@@ -9,6 +9,7 @@ use calibre_lir::{
     },
     environment::LirType,
 };
+use calibre_mir::monomorphization::monomorphized_type_key;
 use calibre_parser::ast::RefMutability;
 use cranelift::codegen::ir::{InstBuilder, MachMemFlags};
 use cranelift_module::Module;
@@ -25,8 +26,26 @@ impl CraneliftTranslation for LirMember {
         let mut index = 0;
 
         let is_enum = match base.data_type.unwrap_all_refs() {
-            MirDataType::Struct { identifier, .. } => {
-                if let Some(lir_type) = translator.registry.types.get(identifier) {
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } => {
+                let identifier = if generic_types.is_empty() {
+                    identifier.clone()
+                } else {
+                    match monomorphized_type_key(
+                        &MirDataType::Struct {
+                            identifier: identifier.clone(),
+                            generic_types: Vec::new(),
+                        },
+                        generic_types,
+                    ) {
+                        MirDataType::Struct { identifier, .. } => identifier,
+                        _ => identifier.clone(),
+                    }
+                };
+
+                if let Some(lir_type) = translator.registry.types.get(&identifier) {
                     match lir_type {
                         LirType::Enum(x) => {
                             data_type = x

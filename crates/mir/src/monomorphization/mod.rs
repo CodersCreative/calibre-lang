@@ -129,6 +129,37 @@ fn mangle_name(base: &str, concrete_args: &[MirDataType]) -> String {
     )
 }
 
+pub fn monomorphized_type_key(
+    original_type: &MirDataType,
+    concrete_args: &[MirDataType],
+) -> MirDataType {
+    let name = match original_type {
+        MirDataType::Struct { identifier, .. } => identifier
+            .fully_qualified_path
+            .name
+            .map(|x| x.as_str())
+            .unwrap_or_else(|| "unknown"),
+        _ => "unknown",
+    };
+
+    let name = mangle_name(name, concrete_args);
+
+    let parent = match original_type {
+        MirDataType::Struct { identifier, .. } => identifier.fully_qualified_path.parent.clone(),
+        _ => None,
+    };
+
+    MirDataType::Struct {
+        identifier: TypeKey {
+            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                name: Some(Ustr::from(&name)),
+                parent,
+            }),
+        },
+        generic_types: Vec::new(),
+    }
+}
+
 fn is_function_impl_member(node: &AstNode) -> bool {
     match &node.node_type {
         AstNodeType::VariableDeclaration(AstDeclaration { value, .. }) => value.is_callable(),
@@ -194,7 +225,7 @@ impl MiddleEnvironment {
             .collect())
     }
 
-    fn unify_types(
+    pub(crate) fn unify_types(
         &mut self,
         _scope: ScopeId,
         pattern: &MirDataType,
@@ -556,30 +587,15 @@ impl MiddleEnvironment {
             })
             .collect();
 
-        let base_name = match &original_type {
+        let type_key = monomorphized_type_key(&original_type, &concrete_args);
+
+        let mono_name = match &type_key {
             MirDataType::Struct { identifier, .. } => identifier
                 .fully_qualified_path
                 .name
                 .map(|x| x.to_string())
-                .unwrap_or_else(|| "unknown".to_string()),
-            _ => "unknown".to_string(),
-        };
-
-        let mono_name = mangle_name(&base_name, &concrete_args);
-
-        let parent_path = match &original_type {
-            MirDataType::Struct { identifier, .. } => identifier.fully_qualified_path.clone(),
-            _ => FullyQualifiedPath::combine(None, Ustr::from("unknown")),
-        };
-
-        let type_key = MirDataType::Struct {
-            identifier: TypeKey {
-                fully_qualified_path: Arc::new(FullyQualifiedPath {
-                    name: Some(Ustr::from(&mono_name)),
-                    parent: Some(parent_path),
-                }),
-            },
-            generic_types: Vec::new(),
+                .unwrap_or_default(),
+            _ => String::new(),
         };
 
         // TODO Find a way to get the original type span
