@@ -93,6 +93,7 @@ impl MirLowering for AstStruct {
                     let has_active_generic = generic_types
                         .iter()
                         .any(|data_type| contains_active_generic_parameter(data_type, env));
+
                     if has_active_generic {
                         identifier.clone()
                     } else {
@@ -279,7 +280,13 @@ impl MirLowering for AstStruct {
                 if let Some((_, (pattern, _))) =
                     fields.0.iter().find(|(field_name, _)| field_name == name)
                 {
-                    env.unify_types(scope, pattern, data_type, &template.generic_params, &mut subst)?;
+                    env.unify_types(
+                        scope,
+                        pattern,
+                        data_type,
+                        &template.generic_params,
+                        &mut subst,
+                    )?;
                 }
             }
 

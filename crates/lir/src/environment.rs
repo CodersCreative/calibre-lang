@@ -1,4 +1,4 @@
-use crate::ast::{BlockId, LirBlock, LirCapture, LirNode, LirTerminator};
+use crate::ast::{BlockId, LirBlock, LirCapture, LirExtern, LirNode, LirTerminator};
 use calibre_mir::{
     ast::{MirFunctionParam, types::MirDataType},
     environment::MiddleEnvironment,
@@ -84,6 +84,12 @@ impl Display for LirGlobal {
     }
 }
 
+impl LirGlobal {
+    pub fn detect_extern(&self) -> Option<(LirExtern, MirDataType)> {
+        LirBlock::detect_extern(&self.blocks)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LirFunctionParam {
     pub var_type: VarType,
@@ -135,6 +141,12 @@ impl Display for LirFunction {
         }
 
         write!(f, "{}", txt)
+    }
+}
+
+impl LirFunction {
+    pub fn detect_extern(&self) -> Option<(LirExtern, MirDataType)> {
+        LirBlock::detect_extern(&self.blocks)
     }
 }
 

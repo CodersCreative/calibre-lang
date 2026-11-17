@@ -1,4 +1,5 @@
 use calibre_lir::MirDataType;
+use calibre_parser::ast::ffi::ParserFfiInnerType;
 use cranelift::prelude::{Type, Value, types};
 
 #[derive(Clone, Copy, Debug)]
@@ -40,6 +41,17 @@ impl CraneliftTypes {
     }
 
     pub fn to_cranelift_type(&self, ty: &MirDataType) -> Type {
+        if let MirDataType::FfiType(inner) = ty.unwrap_all_refs() {
+            if matches!(
+                inner,
+                ParserFfiInnerType::F32 | ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble
+            ) {
+                return types::F64;
+            }
+
+            return types::I64;
+        }
+
         match ty {
             MirDataType::Int => self.int(),
             MirDataType::UInt => self.uint(),

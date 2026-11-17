@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use calibre_lir::MirDataType;
+use calibre_parser::ast::ffi::ParserFfiInnerType;
 use libffi::middle::{Arg, Type};
 use std::os::raw::c_void;
 
@@ -20,6 +21,24 @@ impl ExternFunction {
             MirDataType::Str => Type::pointer(),
             MirDataType::Ptr(_) => Type::pointer(),
             MirDataType::Null => Type::void(),
+            MirDataType::FfiType(inner) => match inner {
+                ParserFfiInnerType::F32 => Type::f32(),
+                ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => Type::f64(),
+                ParserFfiInnerType::U8 | ParserFfiInnerType::UChar => Type::u8(),
+                ParserFfiInnerType::I8 | ParserFfiInnerType::SChar => Type::i8(),
+                ParserFfiInnerType::U16 | ParserFfiInnerType::UShort => Type::u16(),
+                ParserFfiInnerType::I16 | ParserFfiInnerType::Short => Type::i16(),
+                ParserFfiInnerType::U32 | ParserFfiInnerType::UInt => Type::u32(),
+                ParserFfiInnerType::I32 | ParserFfiInnerType::Int => Type::i32(),
+                ParserFfiInnerType::U64
+                | ParserFfiInnerType::ULong
+                | ParserFfiInnerType::ULongLong => Type::u64(),
+                ParserFfiInnerType::I64
+                | ParserFfiInnerType::Long
+                | ParserFfiInnerType::LongLong => Type::i64(),
+                ParserFfiInnerType::USize => Type::usize(),
+                ParserFfiInnerType::ISize => Type::isize(),
+            },
             _ => Type::pointer(),
         }
     }

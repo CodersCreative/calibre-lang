@@ -18,6 +18,8 @@ pub mod big;
 pub mod clone;
 pub mod closure;
 pub mod enums;
+#[cfg(feature = "ffi")]
+pub mod ffi;
 pub mod hasher;
 pub mod host;
 pub mod list;

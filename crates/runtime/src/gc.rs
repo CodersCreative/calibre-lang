@@ -8,6 +8,16 @@ pub struct GcHeader {
     pub marked: bool,
 }
 
+impl GcHeader {
+    pub(crate) fn get_from_ptr(header: *mut GcHeader) -> Option<&'static GcObject> {
+        if header.is_null() {
+            return None;
+        }
+
+        Some(unsafe { &(*header).inner })
+    }
+}
+
 pub struct SendPtr(pub *mut GcHeader);
 unsafe impl Send for SendPtr {}
 unsafe impl Sync for SendPtr {}
@@ -28,6 +38,16 @@ pub static GC_STATS: Mutex<GcStats> = Mutex::new(GcStats {
 
 pub static GC_HEAP: LazyLock<Mutex<Vec<SendPtr>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 pub static GC_ROOTS: LazyLock<Mutex<HashSet<usize>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+
+pub(crate) fn gc_header_at(addr: usize) -> Option<*mut GcHeader> {
+    let heap = GC_HEAP.lock().ok()?;
+    let size = std::mem::size_of::<GcHeader>();
+
+    heap.iter().find_map(|header| {
+        let base = header.0 as usize;
+        (addr >= base && addr < base + size).then_some(header.0)
+    })
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_gc_collect() {

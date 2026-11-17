@@ -25,6 +25,11 @@ hex = "0.4"
 astro-float = "0.9"
 rustc-hash = { workspace = true }
 dyn-hash = "1"
+libffi = { version = "5", features = ["system"], optional = true }
+libloading = { version = "0.9", optional = true }
+
+[features]
+ffi = ["dep:libffi", "dep:libloading"]
 
 [lib]
 crate-type = ["staticlib", "cdylib", "rlib"]

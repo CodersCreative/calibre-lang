@@ -168,7 +168,59 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Ptr(id), MirDataType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(id as *const c_void));
+                            match env.ptr_heap.get(&id).cloned() {
+                                Some(RuntimeValue::List(list)) => {
+                                    let bytes = list
+                                        .0
+                                        .iter()
+                                        .map(|item| {
+                                            match env
+                                                .resolve_value_from_ref(&item.get())
+                                                .unwrap_or_default()
+                                            {
+                                                RuntimeValue::UInt(x) => Ok(x as u8),
+                                                RuntimeValue::Int(x) => Ok(x.cast_unsigned() as u8),
+                                                RuntimeValue::Float(x) => Ok(x as u8),
+                                                RuntimeValue::Bool(x) => Ok(x as u8),
+                                                RuntimeValue::Char(x) => Ok(x as u8),
+                                                _ => Err(RuntimeError::InvalidFunctionCall),
+                                            }
+                                        })
+                                        .collect::<Result<Vec<_>, RuntimeError>>()?;
+
+                                    let ptr = bytes.as_ptr() as *const c_void;
+                                    Self::push_arg(
+                                        &mut ffi_args,
+                                        FfiArg::Bytes { _value: bytes, ptr },
+                                    );
+                                }
+                                Some(RuntimeValue::Str(x)) => {
+                                    let value = CString::new(x.as_str())
+                                        .map_err(|_| RuntimeError::InvalidFunctionCall)?;
+
+                                    let ptr = value.as_ptr() as *const c_void;
+                                    Self::push_arg(
+                                        &mut ffi_args,
+                                        FfiArg::CString { _value: value, ptr },
+                                    );
+                                }
+                                Some(value) => {
+                                    if let Some(bytes) = Self::pack_aggregate_bytes(
+                                        &env.resolve_value(value).unwrap_or_default(),
+                                    ) {
+                                        let ptr = bytes.as_ptr() as *const c_void;
+                                        Self::push_arg(
+                                            &mut ffi_args,
+                                            FfiArg::Bytes { _value: bytes, ptr },
+                                        );
+                                    } else {
+                                        return Err(RuntimeError::InvalidFunctionCall);
+                                    }
+                                }
+                                None => {
+                                    Self::push_arg(&mut ffi_args, FfiArg::Ptr(id as *const c_void));
+                                }
+                            }
                         }
                         (RuntimeValue::List(list), MirDataType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
@@ -431,6 +483,60 @@ impl ExternFunction {
                     let res: *const c_void = cif.call(code, &libffi_args);
                     Ok(RuntimeValue::UInt(res as usize))
                 }
+                MirDataType::FfiType(inner) => match inner {
+                    ParserFfiInnerType::F32 => {
+                        let res: f32 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Float(res as f64))
+                    }
+                    ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => {
+                        let res: f64 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Float(res))
+                    }
+                    ParserFfiInnerType::U8 | ParserFfiInnerType::UChar => {
+                        let res: u8 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::UInt(res as usize))
+                    }
+                    ParserFfiInnerType::I8 | ParserFfiInnerType::SChar => {
+                        let res: i8 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Int(res as isize))
+                    }
+                    ParserFfiInnerType::U16 | ParserFfiInnerType::UShort => {
+                        let res: u16 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::UInt(res as usize))
+                    }
+                    ParserFfiInnerType::I16 | ParserFfiInnerType::Short => {
+                        let res: i16 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Int(res as isize))
+                    }
+                    ParserFfiInnerType::U32 | ParserFfiInnerType::UInt => {
+                        let res: u32 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::UInt(res as usize))
+                    }
+                    ParserFfiInnerType::I32 | ParserFfiInnerType::Int => {
+                        let res: i32 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Int(res as isize))
+                    }
+                    ParserFfiInnerType::U64
+                    | ParserFfiInnerType::ULong
+                    | ParserFfiInnerType::ULongLong => {
+                        let res: u64 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::UInt(res as usize))
+                    }
+                    ParserFfiInnerType::I64
+                    | ParserFfiInnerType::Long
+                    | ParserFfiInnerType::LongLong => {
+                        let res: i64 = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Int(res as isize))
+                    }
+                    ParserFfiInnerType::USize => {
+                        let res: usize = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::UInt(res))
+                    }
+                    ParserFfiInnerType::ISize => {
+                        let res: isize = cif.call(code, &libffi_args);
+                        Ok(RuntimeValue::Int(res))
+                    }
+                },
                 _ => Err(RuntimeError::InvalidFunctionCall),
             }
         }

@@ -225,6 +225,9 @@ impl RunSource {
                     artifacts.init_functions,
                     artifacts.fin_functions,
                     self.program_args,
+                    self.path
+                        .parent()
+                        .map(|dir| dir.to_string_lossy().to_string()),
                 )?;
 
                 if self.time {
@@ -267,6 +270,9 @@ impl RunSource {
                     artifacts.lir.data,
                     artifacts.init_functions,
                     artifacts.fin_functions,
+                    self.path
+                        .parent()
+                        .map(|dir| dir.to_string_lossy().to_string()),
                 )?;
 
                 let obj = aot.finish()?;

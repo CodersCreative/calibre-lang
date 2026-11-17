@@ -217,6 +217,42 @@ impl VM {
         let caller_frame = self.frames.len().saturating_sub(1);
         state.yielded = None;
 
+        #[cfg(feature = "native")]
+        if function.params.is_empty()
+            && let Some(calibre_bytecode::VMLiteral::ExternFunction {
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+                pure,
+                memo,
+                memo_params,
+            }) = self.extern_function_literal(function)
+        {
+            let extern_fn = self.load_extern_function(
+                abi,
+                library,
+                symbol,
+                parameters,
+                return_type,
+                pure,
+                memo,
+                memo_params,
+            )?;
+
+            let args: Vec<RuntimeValue> = match args {
+                FunctionArgs::Values(values) => values.to_vec(),
+                FunctionArgs::Regs(regs) => regs
+                    .iter()
+                    .map(|reg| self.get_reg_value_in_frame(caller_frame, *reg).clone())
+                    .collect(),
+            };
+
+            let result = extern_fn.call(self, &args)?;
+            return Ok(Some(result));
+        }
+
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
             self.push_frame(

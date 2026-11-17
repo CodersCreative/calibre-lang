@@ -4,11 +4,13 @@ use crate::translation::FunctionTranslator;
 use crate::values::{CompiledValue, CraneliftTypes};
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{
-    BlockId, LirAssign, LirBlock, LirLValue, LirNode, LirNodeType, LirTerminator,
+    BlockId, LirAssign, LirBlock, LirExtern, LirLValue, LirNode, LirNodeType, LirTerminator,
 };
 use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::Span;
+use cranelift::codegen::ir::MachMemFlags;
+use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::isa::CallConv;
 use cranelift::codegen::print_errors::pretty_verifier_error;
 use cranelift::codegen::settings;
@@ -41,8 +43,10 @@ pub struct CompilerData {
     layouts: Layouts,
     runtime_functions: RuntimeFunctions,
     function_ids: FxHashMap<VariableKey, FuncId>,
+    extern_functions: FxHashMap<VariableKey, (LirExtern, Vec<MirDataType>, MirDataType)>,
     counter: i64,
     isa: Arc<dyn isa::TargetIsa>,
+    source_dir: Option<String>,
 }
 
 fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
@@ -65,6 +69,10 @@ impl CompilerData {
         init_functions: Vec<(i32, VariableKey)>,
         fin_functions: Vec<(i32, VariableKey)>,
     ) -> Result<(), Box<dyn Error>> {
+        if let Ok(mut dir) = calibre_runtime::native::env::SOURCE_DIR.lock() {
+            *dir = self.source_dir.clone();
+        }
+
         for (name, sig) in runtime_functions() {
             let mut signature = module.make_signature();
             signature.call_conv = CallConv::SystemV;
@@ -87,6 +95,44 @@ impl CompilerData {
 
             let func_id = module.declare_function(*name, Linkage::Import, &signature)?;
             self.runtime_functions.insert(*name, func_id);
+        }
+
+        let extern_globals: Vec<VariableKey> = self
+            .registry
+            .globals
+            .iter()
+            .filter(|(_, global)| global.detect_extern().is_some())
+            .map(|(key, _)| key.clone())
+            .collect();
+
+        for key in extern_globals {
+            let Some(global) = self.registry.globals.remove(&key) else {
+                continue;
+            };
+
+            let Some((func, ty)) = global.detect_extern() else {
+                continue;
+            };
+
+            let (params, ret) = ty.signature();
+
+            self.registry.functions.insert(
+                key.clone(),
+                LirFunction {
+                    name: key.clone(),
+                    params: Box::default(),
+                    captures: Box::default(),
+                    return_type: ret.clone(),
+                    blocks: global.blocks,
+                    pure: func.pure,
+                    memo: func.memo,
+                    referenced_params: 0,
+                    captured_params: 0,
+                    memo_params: 0,
+                },
+            );
+
+            self.extern_functions.insert(key, (func, params, ret));
         }
 
         let mut blocks: Vec<Option<LirBlock>> = Vec::new();
@@ -162,20 +208,34 @@ impl CompilerData {
         for (index, (key, func)) in self.registry.functions.iter().enumerate() {
             let mut signature = module.make_signature();
 
-            if !func.captures.is_empty() {
-                signature.params.push(AbiParam::new(types::I64));
-            }
+            if let Some((_, params, return_type)) = self.extern_functions.get(key) {
+                for param in params.iter() {
+                    signature
+                        .params
+                        .push(AbiParam::new(self.types.to_cranelift_type(param)));
+                }
 
-            for param in func.params.iter() {
-                signature.params.push(AbiParam::new(
-                    self.types.to_cranelift_type(&param.data_type),
-                ));
-            }
+                if !return_type.is_null() && func.return_type != MirDataType::Never {
+                    signature
+                        .returns
+                        .push(AbiParam::new(self.types.to_cranelift_type(return_type)));
+                }
+            } else {
+                if !func.captures.is_empty() {
+                    signature.params.push(AbiParam::new(types::I64));
+                }
 
-            if !func.return_type.is_null() && func.return_type != MirDataType::Never {
-                signature.returns.push(AbiParam::new(
-                    self.types.to_cranelift_type(&func.return_type),
-                ));
+                for param in func.params.iter() {
+                    signature.params.push(AbiParam::new(
+                        self.types.to_cranelift_type(&param.data_type),
+                    ));
+                }
+
+                if !func.return_type.is_null() && func.return_type != MirDataType::Never {
+                    signature.returns.push(AbiParam::new(
+                        self.types.to_cranelift_type(&func.return_type),
+                    ));
+                }
             }
 
             let symbol_name = format!("calibre_fn_{}_{}", index, key);
@@ -195,10 +255,24 @@ impl CompilerData {
             self.function_ids.insert(key.clone(), entry);
         }
 
+        for (key, func) in &self.registry.functions {
+            if let Some((extern_fn, ty)) = func.detect_extern() {
+                let (params, ret) = ty.signature();
+
+                self.extern_functions
+                    .insert(key.clone(), (extern_fn, params, ret));
+            }
+        }
+
         for (key, func) in self.registry.functions.clone() {
             let Some(&function) = self.functions.get(&key) else {
                 continue;
             };
+
+            if let Some((extern_fn, params, ret)) = self.extern_functions.get(&key).cloned() {
+                self.compile_extern_function(module, function, &extern_fn, &params, &ret)?;
+                continue;
+            }
 
             self.context.func.signature.params.clear();
             self.context.func.signature.returns.clear();
@@ -327,33 +401,43 @@ impl CompilerData {
 
                 let args = block_params.get(1).copied().unwrap_or_else(|| env);
 
-                let mut call_args = Vec::with_capacity(func.params.len() + 1);
+                let (param_types, return_type) = self
+                    .extern_functions
+                    .get(&key)
+                    .map(|(_, p, r)| (p.clone(), r.clone()))
+                    .unwrap_or_else(|| {
+                        (
+                            func.params.iter().map(|p| p.data_type.clone()).collect(),
+                            func.return_type.clone(),
+                        )
+                    });
+
+                let mut call_args = Vec::with_capacity(param_types.len() + 1);
                 if !func.captures.is_empty() {
                     call_args.push(env);
                 }
 
-                for (i, param) in func.params.iter().enumerate() {
+                for (i, param_type) in param_types.iter().enumerate() {
                     let index = translator.int_const(i as i64);
                     let payload = translator
                         .runtime_call("calibre_aggregate_get_field_and_deref", &[args, index])?;
 
-                    call_args.push(translator.convert_from_i64(payload, &param.data_type));
+                    call_args.push(translator.convert_from_i64(payload, param_type));
                 }
 
                 let call = translator.builder.ins().call(func_ref, &call_args);
 
-                let payload =
-                    if func.return_type.is_null() || func.return_type == MirDataType::Never {
-                        translator.int_const(0)
-                    } else {
-                        let results = translator.builder.inst_results(call);
-                        let result = results
-                            .first()
-                            .copied()
-                            .ok_or("expected return value from function entry".to_string())?;
-                        translator
-                            .convert_to_i64(CompiledValue::new(result, func.return_type.clone()))?
-                    };
+                let payload = if return_type.is_null() || return_type == MirDataType::Never {
+                    translator.int_const(0)
+                } else {
+                    let result = translator.builder.inst_results(call);
+                    let result = result
+                        .first()
+                        .copied()
+                        .ok_or("expected return value from function entry".to_string())?;
+
+                    translator.convert_to_i64(CompiledValue::new(result, return_type.clone()))?
+                };
 
                 translator.builder.ins().return_(&[payload]);
                 translator.builder.seal_all_blocks();
@@ -435,6 +519,166 @@ impl CompilerData {
 
         Ok(())
     }
+
+    fn compile_extern_function<M: Module>(
+        &mut self,
+        module: &mut M,
+        function: FuncId,
+        extern_fn: &LirExtern,
+        params: &[MirDataType],
+        return_type: &MirDataType,
+    ) -> Result<(), Box<dyn Error>> {
+        use translation::ffi;
+
+        self.context.func.signature.params.clear();
+        self.context.func.signature.returns.clear();
+        self.context.func.signature.call_conv = CallConv::SystemV;
+
+        for param in params {
+            self.context
+                .func
+                .signature
+                .params
+                .push(AbiParam::new(self.types.to_cranelift_type(param)));
+        }
+
+        let return_cl_ty = if !return_type.is_null() && !matches!(return_type, MirDataType::Never) {
+            let ty = self.types.to_cranelift_type(return_type);
+            self.context.func.signature.returns.push(AbiParam::new(ty));
+            Some(ty)
+        } else {
+            None
+        };
+
+        let ffi_id = *self
+            .runtime_functions
+            .get("calibre_ffi_call")
+            .ok_or("calibre_ffi_call not found in runtime_functions")?;
+
+        {
+            let mut builder =
+                FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
+
+            let entry_block = builder.create_block();
+            builder.append_block_params_for_function_params(entry_block);
+            builder.switch_to_block(entry_block);
+
+            let block_params = builder.block_params(entry_block).to_vec();
+
+            let slot = builder.create_sized_stack_slot(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                ((params.len() * 2).max(2) * 8) as u32,
+                8,
+            ));
+
+            let buf_addr = builder.ins().stack_addr(types::I64, slot, 0);
+
+            for (i, param) in params.iter().enumerate() {
+                let value = block_params[i];
+                let cl_ty = builder.func.dfg.value_type(value);
+
+                // TODO Try to tie it back into my convert to i64 system
+                let payload = match cl_ty {
+                    types::F64 => builder
+                        .ins()
+                        .bitcast(types::I64, MachMemFlags::new(), value),
+                    types::I8 => builder.ins().uextend(types::I64, value),
+                    types::I32 => builder.ins().sextend(types::I64, value),
+                    _ => value,
+                };
+
+                let kind = extern_fn
+                    .parameters
+                    .get(i)
+                    .map(|x| ffi::ffi_kind(x))
+                    .unwrap_or_else(|| ffi::ffi_kind(param));
+
+                let kind_val = builder.ins().iconst(types::I64, kind as i64);
+
+                builder
+                    .ins()
+                    .stack_store(types::I64, kind_val, slot, (i * 16) as i32);
+
+                builder
+                    .ins()
+                    .stack_store(types::I64, payload, slot, (i * 16 + 8) as i32);
+            }
+
+            let ptr_type = self.types.ptr();
+
+            macro_rules! cstr_ptr {
+                ($text:expr) => {{
+                    let mut bytes = $text.as_bytes().to_vec();
+                    bytes.push(0);
+
+                    let name = format!("calibre_ffi_str_{}", self.counter);
+                    self.counter += 1;
+
+                    let data_id = module.declare_data(&name, Linkage::Local, false, false)?;
+
+                    let mut data = DataDescription::new();
+                    data.define(bytes.into_boxed_slice());
+                    module.define_data(data_id, &data)?;
+
+                    let handle = module.declare_data_in_func(data_id, builder.func);
+                    builder.ins().symbol_value(ptr_type, handle)
+                }};
+            }
+
+            let library_ptr = cstr_ptr!(&extern_fn.library.to_string());
+            let symbol_ptr = cstr_ptr!(&extern_fn.symbol.to_string());
+
+            let param_len = builder.ins().iconst(types::I64, params.len() as i64);
+            let return_kind = builder
+                .ins()
+                .iconst(types::I64, ffi::ffi_kind(return_type) as i64);
+
+            let func_ref = module.declare_func_in_func(ffi_id, builder.func);
+
+            let call = builder.ins().call(
+                func_ref,
+                &[library_ptr, symbol_ptr, buf_addr, param_len, return_kind],
+            );
+
+            let result = builder.inst_results(call)[0];
+
+            if let Some(ty) = return_cl_ty {
+                let value = if ty == types::F64 {
+                    builder
+                        .ins()
+                        .bitcast(types::F64, MachMemFlags::new(), result)
+                } else if ty == types::I8 {
+                    builder.ins().ireduce(types::I8, result)
+                } else if ty == types::I32 {
+                    builder.ins().ireduce(types::I32, result)
+                } else {
+                    result
+                };
+
+                builder.ins().return_(&[value]);
+            } else {
+                builder.ins().return_(&[]);
+            }
+
+            builder.seal_all_blocks();
+            let frontend_config = self.isa.frontend_config();
+            builder.finalize(frontend_config);
+        }
+
+        match module.define_function(function, &mut self.context) {
+            Ok(_) => {}
+            Err(ModuleError::Compilation(CodegenError::Verifier(verifier_errors))) => {
+                let formatted_error =
+                    pretty_verifier_error(&self.context.func, None, verifier_errors);
+                return Err(format!("Verifier error:\n{}", formatted_error).into());
+            }
+            Err(x) => return Err(Box::new(x)),
+        };
+
+        module.clear_context(&mut self.context);
+
+        Ok(())
+    }
 }
 
 pub struct JitCompiler {
@@ -448,6 +692,7 @@ impl JitCompiler {
         init_functions: Vec<(i32, VariableKey)>,
         fin_functions: Vec<(i32, VariableKey)>,
         args: Vec<String>,
+        source_dir: Option<String>,
     ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
         let mut builder =
@@ -474,8 +719,10 @@ impl JitCompiler {
             registry,
             runtime_functions: FxHashMap::default(),
             function_ids: FxHashMap::default(),
+            extern_functions: FxHashMap::default(),
             counter: 1,
             isa,
+            source_dir,
         };
 
         if let Ok(mut x) = calibre_runtime::native::env::PROGRAM_ARGS.lock() {
@@ -507,6 +754,7 @@ impl AotCompiler {
         registry: LirRegistry,
         init_functions: Vec<(i32, VariableKey)>,
         fin_functions: Vec<(i32, VariableKey)>,
+        source_dir: Option<String>,
     ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
 
@@ -533,8 +781,10 @@ impl AotCompiler {
             registry,
             runtime_functions: FxHashMap::default(),
             function_ids: FxHashMap::default(),
+            extern_functions: FxHashMap::default(),
             counter: 1,
             isa,
+            source_dir,
         };
 
         data.compile(&mut module, init_functions, fin_functions)?;

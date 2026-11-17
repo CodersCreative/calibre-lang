@@ -126,6 +126,12 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_aggregate_ref_get_field",
             ptr: aggregate::calibre_aggregate_ref_get_field as *const u8,
         },
+        // ffi
+        #[cfg(feature = "ffi")]
+        RuntimeSymbol {
+            name: "calibre_ffi_call",
+            ptr: values::ffi::calibre_ffi_call as *const u8,
+        },
         // closure
         RuntimeSymbol {
             name: "calibre_fn_closure_new",

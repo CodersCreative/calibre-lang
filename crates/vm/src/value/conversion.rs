@@ -181,7 +181,9 @@ impl RuntimeValue {
             (RuntimeValue::Ptr(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Null, MirDataType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
             (value, MirDataType::Ptr(inner)) => {
-                let converted = if **inner == MirDataType::Null {
+                let converted = if **inner == MirDataType::Null
+                    || matches!(value, RuntimeValue::List(_) | RuntimeValue::Str(_))
+                {
                     value
                 } else {
                     value.convert(env, inner)?

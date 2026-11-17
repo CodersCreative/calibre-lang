@@ -55,37 +55,7 @@ impl VMEvaluation for VMLoadLiteral {
                 memo,
                 memo_params,
             } => {
-                use crate::value::ffi::ExternFunction;
-
-                let abi_lower = abi.to_ascii_lowercase();
-                if abi_lower != "c" && abi_lower != "zig" {
-                    return Err(RuntimeError::Ffi(format!("unsupported ABI \"{}\"", abi)));
-                }
-
-                let mut last_err = None;
-                let mut handle_opt = None;
-
-                let candidates = VM::resolve_library_candidates(&library);
-
-                for candidate in candidates {
-                    match unsafe { libloading::Library::new(&candidate) } {
-                        Ok(h) => {
-                            handle_opt = Some(h);
-                            break;
-                        }
-                        Err(e) => last_err = Some(e.to_string()),
-                    }
-                }
-
-                let handle = handle_opt.ok_or_else(|| {
-                    RuntimeError::Ffi(format!(
-                        "failed to load library {} ({})",
-                        library,
-                        last_err.unwrap_or_else(|| "no candidates".to_string())
-                    ))
-                })?;
-
-                let func = ExternFunction {
+                let func = vm.load_extern_function(
                     abi,
                     library,
                     symbol,
@@ -94,8 +64,7 @@ impl VMEvaluation for VMLoadLiteral {
                     pure,
                     memo,
                     memo_params,
-                    handle: Arc::new(handle),
-                };
+                )?;
 
                 vm.set_reg_value(self.dst, RuntimeValue::ExternFunction(Arc::new(func)));
             }

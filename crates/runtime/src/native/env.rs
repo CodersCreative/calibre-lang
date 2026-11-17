@@ -7,6 +7,8 @@ use wasm_sync::Mutex;
 pub static PROGRAM_ARGS: LazyLock<Mutex<Vec<String>>> =
     LazyLock::new(|| Mutex::new(env::args().skip(1).collect()));
 
+pub static SOURCE_DIR: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_env_get_all() -> *mut GcList {
     GcList {

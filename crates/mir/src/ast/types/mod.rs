@@ -429,6 +429,16 @@ impl MirDataType {
         }
     }
 
+    pub fn signature(&self) -> (Vec<MirDataType>, MirDataType) {
+        match self.unwrap_all_refs() {
+            MirDataType::Function {
+                parameters,
+                return_type,
+            } => (parameters.clone(), (**return_type).clone()),
+            _ => (Vec::new(), MirDataType::Null),
+        }
+    }
+
     // Only for cranelift
     pub fn type_tag<'a>(&self, mut enums: impl Iterator<Item = &'a TypeKey>) -> usize {
         match self {

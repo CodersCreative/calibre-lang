@@ -166,7 +166,11 @@ impl BuildSource {
                 artifacts.lir.data,
                 artifacts.init_functions,
                 artifacts.fin_functions,
+                self.path
+                    .parent()
+                    .map(|dir| dir.to_string_lossy().to_string()),
             )?;
+
             let obj = aot.finish()?;
 
             fs::create_dir_all(&cache_dir).await?;

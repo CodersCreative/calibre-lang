@@ -600,6 +600,8 @@ dependencies = [
  "errno",
  "fastrand",
  "hex",
+ "libffi",
+ "libloading",
  "regex",
  "rustc-hash",
  "sha2",

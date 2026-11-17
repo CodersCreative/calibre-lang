@@ -552,3 +552,19 @@ impl Display for LirBlock {
         write!(f, "{}", txt.replace("\n", "\n\t"))
     }
 }
+
+impl LirBlock {
+    pub fn detect_extern(blocks: &[Option<Self>]) -> Option<(LirExtern, MirDataType)> {
+        for block in blocks.iter().flatten() {
+            for inst in &block.instructions {
+                if let LirNodeType::Declare(decl) = &inst.node_type
+                    && let LirNodeType::ExternFunction(extern_fn) = &*decl.value
+                {
+                    return Some((extern_fn.clone(), decl.data_type.clone()));
+                }
+            }
+        }
+
+        None
+    }
+}

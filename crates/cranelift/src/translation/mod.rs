@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 pub mod access;
 pub mod expression;
+pub mod ffi;
 pub mod flow;
 pub mod functions;
 pub mod literals;

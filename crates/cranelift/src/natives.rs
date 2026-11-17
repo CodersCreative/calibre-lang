@@ -152,6 +152,20 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_ffi_call",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Int),
+                },
+            ),
+            (
                 "calibre_deref",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
