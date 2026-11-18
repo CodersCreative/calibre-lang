@@ -40,6 +40,7 @@ impl RuntimeValue {
                 ("len", Arc::new(native::global::Len)),
                 ("trim", Arc::new(native::global::Trim)),
                 ("wait", Arc::new(native::global::Wait)),
+                ("exit", Arc::new(native::global::Exit)),
                 ("random.rand", Arc::new(stdlib::random::Rand)),
                 ("random.seed", Arc::new(stdlib::random::Seed)),
                 ("time.unix_now", Arc::new(stdlib::time::UnixNow)),

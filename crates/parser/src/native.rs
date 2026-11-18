@@ -42,6 +42,7 @@ impl ParserDataType {
 
         NATIVES.get_or_init(|| {
             let lst: Vec<(&str, Vec<ParserInnerType>, ParserInnerType)> = vec![
+                ("exit", vec![ParserInnerType::UInt], ParserInnerType::Never),
                 (
                     "console_output",
                     vec![ParserInnerType::Int, ParserInnerType::Str],

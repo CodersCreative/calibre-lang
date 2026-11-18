@@ -1,5 +1,23 @@
 import * from std::str;
 
+// Based on exitcode crate
+const EXIT_CANTCREAT := 73u;
+const EXIT_CONFIG := 78u;
+const EXIT_DATAERR := 65u;
+const EXIT_IOERR := 74u;
+const EXIT_NOHOST := 68u;
+const EXIT_NOINPUT := 66u;
+const EXIT_NOPERM := 77u;
+const EXIT_NOUSER := 67u;
+const EXIT_OK := 0u;
+const EXIT_OSERR := 71u;
+const EXIT_OSFILE := 72u;
+const EXIT_PROTOCOL := 76u;
+const EXIT_SOFTWARE := 70u;
+const EXIT_TEMPFAIL := 75u;
+const EXIT_UNAVAILABLE := 69u;
+const EXIT_USAGE := 64u;
+
 type ProcessResult := struct {
 	command : str,
 	status : int,

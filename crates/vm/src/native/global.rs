@@ -13,6 +13,7 @@ use crate::{
 use calibre_parser::ast::types::ParserInnerType;
 use std::{
     io::{self, BufRead, Write},
+    process::exit,
     time::Duration,
 };
 use ustr::Ustr;
@@ -132,6 +133,21 @@ impl NativeFunction for Wait {
         thread::sleep(Duration::from_millis(val));
 
         Ok(RuntimeValue::Null)
+    }
+}
+
+pub struct Exit;
+
+impl NativeFunction for Exit {
+    fn name(&self) -> String {
+        String::from("exit")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        let val = resolve_int(env, pop_or_null(&mut args))?.cast_unsigned() as u64;
+        exit(val as i32)
     }
 }
 

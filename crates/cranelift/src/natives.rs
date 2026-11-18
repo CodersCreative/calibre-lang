@@ -500,6 +500,14 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_exit",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
                 "calibre_wait",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
@@ -1237,6 +1245,7 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("console_output", "calibre_console_output"),
             ("console_input", "calibre_console_input"),
             ("trim", "calibre_trim"),
+            ("exit", "calibre_exit"),
             ("wait", "calibre_wait"),
             ("len", "calibre_len"),
             ("min_or_zero", "calibre_min_or_zero"),

@@ -1,0 +1,7 @@
+import EXIT_UNAVAILABLE from std::process;
+
+const main := fn => {
+    print("Started");
+    exit(EXIT_UNAVAILABLE);
+    print("Should not print");
+}

@@ -233,6 +233,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: native::calibre_trim as *const u8,
         },
         RuntimeSymbol {
+            name: "calibre_exit",
+            ptr: native::calibre_exit as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_wait",
             ptr: native::calibre_wait as *const u8,
         },
