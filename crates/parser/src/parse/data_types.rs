@@ -286,8 +286,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                             ParserInnerType::Option(Box::new(inner)),
                         )
                     }),
-                ))
-                .memoized(), atom,
+                )), atom,
                 )).boxed()
             },
         )

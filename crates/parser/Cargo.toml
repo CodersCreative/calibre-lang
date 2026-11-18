@@ -19,7 +19,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true}
 rustc-hash = { workspace = true }
-chumsky = { version = "0.13", features = ["pratt", "memoization"]}
+chumsky = { version = "0.14", features = ["pratt"]}
 logos = "0.16"
 logos-display = "0.1"
 ustr = { workspace = true }
