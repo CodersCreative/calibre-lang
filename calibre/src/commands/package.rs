@@ -37,6 +37,7 @@ impl Package {
         }
 
         let mut handles = Vec::new();
+        self.parallel = self.parallel && targets.len() > 1;
 
         for (index, path) in targets.into_iter().enumerate() {
             let contents = fs::read_to_string(&path).await?;
@@ -80,11 +81,21 @@ impl Package {
             }
         }
 
+        let mut last_err = None;
+
         for handle in handles {
-            let _ = handle.join();
+            match handle.join() {
+                Ok(Err(err)) => last_err = Some(err.into()),
+                Err(_) => last_err = Some("Error occured when joining process".into()),
+                Ok(_) => {}
+            }
         }
 
-        Ok(())
+        if let Some(err) = last_err {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 }
 
