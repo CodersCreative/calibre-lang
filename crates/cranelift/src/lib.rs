@@ -469,39 +469,66 @@ impl CompilerData {
         self.context.func.signature.returns.clear();
 
         {
-            let mut builder =
-                FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
+            let builder = FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
 
-            let entry_block = builder.create_block();
-            builder.append_block_params_for_function_params(entry_block);
-            builder.switch_to_block(entry_block);
+            let mut translator = FunctionTranslator::new(
+                builder,
+                module,
+                &self.registry,
+                &self.types,
+                &mut self.layouts,
+                &self.globals,
+                &self.functions,
+                &self.runtime_functions,
+                &mut self.counter,
+                MirDataType::Null,
+                self.isa.clone(),
+                &self.function_ids,
+            );
+
+            let entry_block = translator.builder.create_block();
+
+            translator
+                .builder
+                .append_block_params_for_function_params(entry_block);
+
+            translator.builder.switch_to_block(entry_block);
 
             let init_globals_key = VariableKey::from("calibre_init_globals");
+            if let Some(&func_id) = translator.functions.get(&init_globals_key) {
+                let func_ref = translator
+                    .module
+                    .declare_func_in_func(func_id, translator.builder.func);
 
-            let mut startup_functions = vec![init_globals_key];
-            startup_functions.extend(init_functions.into_iter().map(|x| x.1));
-            startup_functions.extend(fin_functions.into_iter().map(|x| x.1));
+                let args = if translator
+                    .registry
+                    .functions
+                    .get(&init_globals_key)
+                    .is_some_and(|f| !f.captures.is_empty())
+                {
+                    vec![translator.int_const(0)]
+                } else {
+                    Vec::new()
+                };
 
-            for func_key in startup_functions {
-                if let Some(&func_id) = self.functions.get(&func_key) {
-                    let func_ref = module.declare_func_in_func(func_id, builder.func);
-
-                    let args = if self
-                        .registry
-                        .functions
-                        .get(&func_key)
-                        .is_some_and(|f| !f.captures.is_empty())
-                    {
-                        vec![builder.ins().iconst(types::I64, 0)]
-                    } else {
-                        Vec::new()
-                    };
-
-                    builder.ins().call(func_ref, &args);
-                }
+                translator.builder.ins().call(func_ref, &args);
             }
 
-            builder.ins().return_(&[]);
+            for (_, func_key) in init_functions {
+                translator.runtime_lifecycle_call(&func_key, 0)?;
+            }
+
+            for (_, func_key) in fin_functions {
+                translator.runtime_lifecycle_call(&func_key, 1)?;
+            }
+
+            translator.runtime_call_void("calibre_exit_flush", &[])?;
+
+            translator.builder.ins().return_(&[]);
+            translator.builder.seal_all_blocks();
+
+            let frontend_config = translator.isa.frontend_config();
+            translator.builder.finalize(frontend_config);
         }
 
         match module.define_function(start_func_id, &mut self.context) {

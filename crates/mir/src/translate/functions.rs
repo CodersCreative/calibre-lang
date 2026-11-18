@@ -549,6 +549,43 @@ impl MirLowering for AstFunction {
             );
         }
 
+        let is_init_or_fin = env
+            .tagging
+            .tag_info
+            .iter()
+            .any(|tag| matches!(tag, TagInfo::Init(_) | TagInfo::Fin(_)));
+
+        if is_init_or_fin {
+            if !params.is_empty() {
+                env.context.push_error(env.context.err_at_span(
+                    span,
+                    MiddleErr::InitFinInvalidSignature(String::from(
+                        "@init or @fin functions cannot take any arguments",
+                    )),
+                ));
+            }
+
+            let is_allowed = matches!(
+                return_type,
+                MirDataType::Never
+                    | MirDataType::Null
+                    | MirDataType::Int
+                    | MirDataType::UInt
+                    | MirDataType::Byte
+                    | MirDataType::Result { .. }
+                    | MirDataType::Option(_)
+            );
+
+            if !is_allowed {
+                env.context.push_error(env.context.err_at_span(
+                    span,
+                    MiddleErr::InitFinInvalidSignature(format!(
+                        "return type `{return_type}` is not allowed - expected null, never, int, uint, byte, result, or option"
+                    )),
+                ));
+            }
+        }
+
         let default_args_id = if default_params.is_empty() {
             None
         } else {

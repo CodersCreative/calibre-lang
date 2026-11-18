@@ -171,6 +171,8 @@ pub enum MiddleErr {
     NonExhaustiveMatch { missing_patterns: Vec<String> },
     #[error("Unreachable match arm at index {arm_index}")]
     UnreachableMatchArm { arm_index: usize },
+    #[error("Invalid @init or @fin signature: {0}")]
+    InitFinInvalidSignature(String),
     // Internal errors (codes 230-259)
     #[error("Internal error: missing function {0}")]
     InternalMissingFunction(String),
@@ -289,6 +291,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::CannotInferGenericTypeParameter(_) => "M069",
             Self::NonExhaustiveMatch { .. } => "M070",
             Self::UnreachableMatchArm { .. } => "M071",
+            Self::InitFinInvalidSignature(_) => "M072",
             // Internal errors (codes M0100-M149)
             Self::InternalMissingFunction(_) => "M100",
             Self::InternalMissingImpl(_) => "M101",
@@ -387,6 +390,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             }
             Self::PureFunctionNoReturnType => Some(String::from(
                 "Add a return type to the function signature or remove @pure because a pure function with no return type would be optimized out at compile time",
+            )),
+            Self::InitFinInvalidSignature(_) => Some(String::from(
+                "@init or @fin functions take no arguments and must return null, never, int, uint, byte, result, or option",
             )),
             Self::EnumVariant(variant) => Some(format!("enum variant `{variant}` does not exist")),
             Self::InvalidType { expected, found } => {

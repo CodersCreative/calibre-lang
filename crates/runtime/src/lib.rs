@@ -4,6 +4,7 @@ use crate::{
 };
 use astro_float::RoundingMode;
 
+pub mod exit;
 pub mod gc;
 pub mod native;
 pub mod values;
@@ -235,6 +236,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_exit",
             ptr: native::calibre_exit as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_exit_check",
+            ptr: exit::calibre_exit_check as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_exit_flush",
+            ptr: exit::calibre_exit_flush as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_wait",

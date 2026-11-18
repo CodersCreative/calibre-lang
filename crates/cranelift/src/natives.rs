@@ -508,6 +508,25 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_exit_check",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::TagPayload),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_exit_flush",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
                 "calibre_wait",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],

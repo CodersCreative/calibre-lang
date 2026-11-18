@@ -9,9 +9,10 @@ use calibre_frontend::config::ProjectContext;
 use calibre_frontend::paths::resolve_run_targets;
 use calibre_lir::VariableKey;
 use calibre_mir::tags::context::PackageMetadata;
-use calibre_vm::{VM, config::VMConfig};
+use calibre_vm::{VM, config::VMConfig, value::RuntimeValue};
 use derive_builder::Builder;
 use smol::fs;
+use std::process::exit;
 use std::{error::Error, path::PathBuf};
 use tracing::instrument;
 use ustr::Ustr;
@@ -49,6 +50,7 @@ impl Run {
         }
 
         let mut handles = Vec::new();
+        self.parallel = self.parallel && targets.len() > 1;
 
         for (index, path) in targets.into_iter().enumerate() {
             let contents = fs::read_to_string(&path).await?;
@@ -107,11 +109,21 @@ impl Run {
             }
         }
 
+        let mut last_err = None;
+
         for handle in handles {
-            let _ = handle.join();
+            match handle.join() {
+                Ok(Err(err)) => last_err = Some(err.into()),
+                Err(_) => last_err = Some("Error occured when joining process".into()),
+                Ok(_) => {}
+            }
         }
 
-        Ok(())
+        if let Some(err) = last_err {
+            Err(err)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -135,6 +147,27 @@ struct RunSource {
     profiling_output: Option<PathBuf>,
     backtrace: bool,
     included: Vec<PackagedProgramBlob>,
+}
+
+enum ExitOutcome {
+    Continue,
+    Code(i32),
+    Fail(String),
+}
+
+impl ExitOutcome {
+    pub fn get(vm: &VM, value: &RuntimeValue) -> Self {
+        match value {
+            RuntimeValue::Int(x) => ExitOutcome::Code(*x as i32),
+            RuntimeValue::UInt(x) => ExitOutcome::Code(*x as i32),
+            RuntimeValue::Byte(x) => ExitOutcome::Code(*x as i32),
+            RuntimeValue::Option(None) => ExitOutcome::Code(1),
+            RuntimeValue::Result(Err(slot)) => {
+                ExitOutcome::Fail(RuntimeValue::from(slot).display(vm))
+            }
+            _ => ExitOutcome::Continue,
+        }
+    }
 }
 
 impl RunSource {
@@ -363,19 +396,33 @@ impl RunSource {
         let mut ran = false;
         for (_, func_name) in artifacts.init_functions {
             if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
-                if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
-                    if self.backtrace {
-                        eprintln!("{}", vm.format_backtrace());
+                match vm.run(init_func.as_ref(), Vec::new()) {
+                    Err(err) => {
+                        if self.backtrace {
+                            eprintln!("{}", vm.format_backtrace());
+                        }
+
+                        calibre_frontend::diagnostics::emit_calibre_error(
+                            &self.path,
+                            &self.contents,
+                            &err,
+                            None,
+                        );
+
+                        return Err("runtime error".into());
                     }
-                    calibre_frontend::diagnostics::emit_calibre_error(
-                        &self.path,
-                        &self.contents,
-                        &err,
-                        None,
-                    );
-                    return Err("runtime error".into());
+                    Ok(value) => {
+                        ran = true;
+
+                        match ExitOutcome::get(&vm, &value) {
+                            ExitOutcome::Continue => {}
+                            ExitOutcome::Code(code) => exit(code),
+                            ExitOutcome::Fail(message) => {
+                                return Err(message.into());
+                            }
+                        }
+                    }
                 }
-                ran = true;
             }
         }
 
@@ -392,23 +439,50 @@ impl RunSource {
             return Err("runtime error".into());
         }
 
+        let mut fin_code = 0;
+        let mut fin_error = None;
+        let mut fin_failure = None;
+
         for (_, func_name) in artifacts.fin_functions {
-            if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned()
-                && let Err(err) = vm.run(fin_func.as_ref(), Vec::new())
-            {
-                if self.backtrace {
-                    eprintln!("{}", vm.format_backtrace());
+            if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
+                match vm.run(fin_func.as_ref(), Vec::new()) {
+                    Ok(value) => match ExitOutcome::get(&vm, &value) {
+                        ExitOutcome::Continue => {}
+                        ExitOutcome::Code(code) => fin_code = code,
+                        ExitOutcome::Fail(message) => {
+                            if fin_error.is_none() {
+                                fin_error = Some(message);
+                            }
+
+                            fin_code = 1;
+                        }
+                    },
+                    Err(err) => {
+                        if fin_failure.is_none() {
+                            fin_failure = Some(err);
+                        }
+                    }
                 }
-
-                calibre_frontend::diagnostics::emit_calibre_error(
-                    &self.path,
-                    &self.contents,
-                    &err,
-                    None,
-                );
-
-                return Err("runtime error".into());
             }
+        }
+
+        if let Some(err) = fin_failure {
+            if self.backtrace {
+                eprintln!("{}", vm.format_backtrace());
+            }
+
+            calibre_frontend::diagnostics::emit_calibre_error(
+                &self.path,
+                &self.contents,
+                &err,
+                None,
+            );
+
+            return Err("runtime error".into());
+        } else if let Some(message) = fin_error {
+            return Err(message.into());
+        } else if fin_code != 0 {
+            exit(fin_code);
         }
 
         if self.time {

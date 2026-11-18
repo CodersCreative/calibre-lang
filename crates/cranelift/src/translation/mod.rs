@@ -133,6 +133,55 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         Ok(())
     }
 
+    pub fn runtime_lifecycle_call(
+        &mut self,
+        func_key: &VariableKey,
+        phase: i64,
+    ) -> Result<(), Box<dyn Error>> {
+        let Some(func_id) = self.functions.get(func_key).cloned() else {
+            return Ok(());
+        };
+
+        let func_ref = self.module.declare_func_in_func(func_id, self.builder.func);
+
+        let args = if self
+            .registry
+            .functions
+            .get(func_key)
+            .is_some_and(|f| !f.captures.is_empty())
+        {
+            vec![self.int_const(0)]
+        } else {
+            Vec::new()
+        };
+
+        let call = self.builder.ins().call(func_ref, &args);
+        let result = self.builder.inst_results(call);
+
+        let Some(&result) = result.first() else {
+            return Ok(());
+        };
+
+        let return_type = self
+            .registry
+            .functions
+            .get(func_key)
+            .map(|f| f.return_type.clone())
+            .unwrap_or(MirDataType::Null);
+
+        if !return_type.is_option() && !return_type.is_result() && !return_type.is_int() {
+            return Ok(());
+        }
+
+        let payload = self.convert_to_i64(CompiledValue::new(result, return_type.clone()))?;
+        let tag = self.int_const(return_type.type_tag(self.registry.enums()) as i64);
+        let phase = self.int_const(phase);
+
+        self.runtime_call_void("calibre_exit_check", &[tag, payload, phase])?;
+
+        Ok(())
+    }
+
     pub(crate) fn box_value(
         &mut self,
         data_type: &MirDataType,

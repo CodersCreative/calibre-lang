@@ -1,7 +1,22 @@
-import EXIT_UNAVAILABLE from std::process;
+@init(10) const early_setup := fn -> result:<int, str> => {
+	print("early setup ok");
+	return ok(0);
+};
 
-const main := fn => {
-    print("Started");
-    exit(EXIT_UNAVAILABLE);
-    print("Should not print");
-}
+@init(5) const load := fn => {
+	print("load");
+};
+
+const main := fn -> option:<int> => {
+	print("main");
+	return some(0);
+};
+
+@fin(10) const cleanup := fn => {
+	print("cleanup");
+};
+
+@fin(5) const report := fn -> result:<int, str> => {
+	print("report fin");
+	return err("shutdown reported a problem");
+};
