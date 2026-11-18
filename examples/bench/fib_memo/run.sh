@@ -1,18 +1,22 @@
 hyperfine \
   "calibre run test_gen.cal" \
   "calibre run test_ffi.cal" \
+  "calibre run --backend jit test_ffi.cal" \
   "calibre run --no-cache test_ffi.cal" \
   "calibre run --no-type-check test_ffi.cal" \
   "calibre run --no-type-check --no-cache test_ffi.cal" \
   "calibre run test_none_ffi.cal" \
+  "calibre run --backend jit test_none_ffi.cal" \
   "calibre run --no-cache test_none_ffi.cal" \
   "calibre run --no-type-check test_none_ffi.cal" \
   "calibre run --no-type-check --no-cache test_none_ffi.cal" \
   "calibre run test.cal" \
+  "calibre run --backend jit test.cal" \
   "calibre run --no-cache test.cal" \
   "calibre run --no-type-check test.cal" \
   "calibre run --no-type-check --no-cache test.cal" \
   "calibre run test_tail.cal" \
+  "calibre run --backend jit test_tail.cal" \
   "calibre run --no-cache test_tail.cal" \
   "calibre run --no-type-check test_tail.cal" \
   "calibre run --no-type-check --no-cache test_tail.cal" \

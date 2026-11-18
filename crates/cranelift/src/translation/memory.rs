@@ -71,7 +71,7 @@ impl CraneliftTranslation for LirLoad {
                 }
             }
         } else if let Some(value) = translator.boxed_vars.get(&self.value).cloned() {
-            let data_type = value.data_type;
+            let data_type = value.data_type.unwrap_ffi();
             let value = translator.runtime_call("calibre_deref", &[value.value])?;
             let value = translator.convert_from_i64(value, &data_type);
 

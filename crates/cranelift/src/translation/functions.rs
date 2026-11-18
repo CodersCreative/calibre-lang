@@ -288,6 +288,8 @@ fn emit_indirect_call<'a, M: Module>(
         .ins()
         .call_indirect(sig, entry, &[closure, args_agg]);
 
+    let return_type = return_type.unwrap_ffi();
+
     let value = translator.builder.inst_results(call)[0];
     let value = translator.convert_from_i64(value, &return_type);
 

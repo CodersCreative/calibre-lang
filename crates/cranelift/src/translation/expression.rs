@@ -345,7 +345,7 @@ impl CraneliftTranslation for LirBinary {
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
     pub fn convert_to_i64(&mut self, value: CompiledValue) -> Result<Value, Box<dyn Error>> {
-        match value.data_type {
+        match value.data_type.unwrap_ffi() {
             MirDataType::Int => Ok(value.value),
             MirDataType::UInt => Ok(value.value),
             MirDataType::Float => {

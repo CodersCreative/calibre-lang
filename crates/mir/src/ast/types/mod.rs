@@ -456,17 +456,17 @@ impl MirDataType {
             | MirDataType::FfiType(ParserFfiInnerType::ISize)
             | MirDataType::FfiType(ParserFfiInnerType::Int) => 2,
             MirDataType::UInt
-            | MirDataType::FfiType(ParserFfiInnerType::U8)
             | MirDataType::FfiType(ParserFfiInnerType::U16)
             | MirDataType::FfiType(ParserFfiInnerType::U32)
             | MirDataType::FfiType(ParserFfiInnerType::U64)
-            | MirDataType::FfiType(ParserFfiInnerType::UChar)
             | MirDataType::FfiType(ParserFfiInnerType::ULong)
             | MirDataType::FfiType(ParserFfiInnerType::ULongLong)
             | MirDataType::FfiType(ParserFfiInnerType::UShort)
             | MirDataType::FfiType(ParserFfiInnerType::USize)
             | MirDataType::FfiType(ParserFfiInnerType::UInt) => 3,
-            MirDataType::Byte => 4,
+            MirDataType::Byte
+            | MirDataType::FfiType(ParserFfiInnerType::U8)
+            | MirDataType::FfiType(ParserFfiInnerType::UChar) => 4,
             MirDataType::Float
             | MirDataType::FfiType(ParserFfiInnerType::F32)
             | MirDataType::FfiType(ParserFfiInnerType::F64) => 5,
@@ -506,6 +506,61 @@ impl MirDataType {
 
     pub fn is_ffi(&self) -> bool {
         matches!(self.unwrap_all_refs(), MirDataType::FfiType(_))
+    }
+
+    pub fn unwrap_ffi(self) -> Self {
+        match self {
+            MirDataType::FfiType(ParserFfiInnerType::I8)
+            | MirDataType::FfiType(ParserFfiInnerType::I16)
+            | MirDataType::FfiType(ParserFfiInnerType::I32)
+            | MirDataType::FfiType(ParserFfiInnerType::I64)
+            | MirDataType::FfiType(ParserFfiInnerType::SChar)
+            | MirDataType::FfiType(ParserFfiInnerType::Long)
+            | MirDataType::FfiType(ParserFfiInnerType::LongLong)
+            | MirDataType::FfiType(ParserFfiInnerType::Short)
+            | MirDataType::FfiType(ParserFfiInnerType::ISize)
+            | MirDataType::FfiType(ParserFfiInnerType::Int) => MirDataType::Int,
+            MirDataType::FfiType(ParserFfiInnerType::U16)
+            | MirDataType::FfiType(ParserFfiInnerType::U32)
+            | MirDataType::FfiType(ParserFfiInnerType::U64)
+            | MirDataType::FfiType(ParserFfiInnerType::ULong)
+            | MirDataType::FfiType(ParserFfiInnerType::ULongLong)
+            | MirDataType::FfiType(ParserFfiInnerType::UShort)
+            | MirDataType::FfiType(ParserFfiInnerType::USize)
+            | MirDataType::FfiType(ParserFfiInnerType::UInt) => MirDataType::UInt,
+            MirDataType::FfiType(ParserFfiInnerType::U8)
+            | MirDataType::FfiType(ParserFfiInnerType::UChar) => MirDataType::Byte,
+            MirDataType::FfiType(ParserFfiInnerType::F32)
+            | MirDataType::FfiType(ParserFfiInnerType::F64) => MirDataType::Float,
+            MirDataType::List(x) => MirDataType::List(Box::new(x.unwrap_ffi())),
+            MirDataType::Ptr(x) => MirDataType::Ptr(Box::new(x.unwrap_ffi())),
+            MirDataType::Option(x) => MirDataType::Option(Box::new(x.unwrap_ffi())),
+            MirDataType::Ref(x, mutability) => {
+                MirDataType::Ref(Box::new(x.unwrap_ffi()), mutability)
+            }
+            MirDataType::Result { ok, err } => MirDataType::Result {
+                ok: Box::new(ok.unwrap_ffi()),
+                err: Box::new(err.unwrap_ffi()),
+            },
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } => MirDataType::Struct {
+                identifier,
+                generic_types: generic_types.into_iter().map(Self::unwrap_ffi).collect(),
+            },
+            MirDataType::Tuple(x) => {
+                MirDataType::Tuple(x.into_iter().map(Self::unwrap_ffi).collect())
+            }
+            MirDataType::Function {
+                return_type,
+                parameters,
+            } => MirDataType::Function {
+                return_type: Box::new(return_type.unwrap_ffi()),
+                parameters: parameters.into_iter().map(Self::unwrap_ffi).collect(),
+            },
+            x => x,
+        }
     }
 
     pub fn is_int(&self) -> bool {

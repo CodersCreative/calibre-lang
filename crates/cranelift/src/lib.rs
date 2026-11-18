@@ -416,12 +416,12 @@ impl CompilerData {
                     call_args.push(env);
                 }
 
-                for (i, param_type) in param_types.iter().enumerate() {
+                for (i, param_type) in param_types.into_iter().enumerate() {
                     let index = translator.int_const(i as i64);
                     let payload = translator
                         .runtime_call("calibre_aggregate_get_field_and_deref", &[args, index])?;
 
-                    call_args.push(translator.convert_from_i64(payload, param_type));
+                    call_args.push(translator.convert_from_i64(payload, &param_type.unwrap_ffi()));
                 }
 
                 let call = translator.builder.ins().call(func_ref, &call_args);
@@ -554,6 +554,26 @@ impl CompilerData {
             .get("calibre_ffi_call")
             .ok_or("calibre_ffi_call not found in runtime_functions")?;
 
+        let memo_funcs = if extern_fn.memo {
+            let get = |name: &str| -> Result<FuncId, Box<dyn Error>> {
+                self.runtime_functions
+                    .get(name)
+                    .copied()
+                    .ok_or_else(|| format!("{} not found in runtime_functions", name).into())
+            };
+
+            Some((
+                get("calibre_new_hasher")?,
+                get("calibre_hash_add")?,
+                get("calibre_hash_finish")?,
+                get("calibre_memo_contains")?,
+                get("calibre_memo_get")?,
+                get("calibre_memo_set")?,
+            ))
+        } else {
+            None
+        };
+
         {
             let mut builder =
                 FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
@@ -563,6 +583,98 @@ impl CompilerData {
             builder.switch_to_block(entry_block);
 
             let block_params = builder.block_params(entry_block).to_vec();
+
+            let memo_hash = if let Some((
+                new_hasher_id,
+                hash_add_id,
+                hash_finish_id,
+                memo_contains_id,
+                memo_get_id,
+                _,
+            )) = memo_funcs
+            {
+                let hasher_ref = module.declare_func_in_func(new_hasher_id, builder.func);
+                let hasher_call = builder.ins().call(hasher_ref, &[]);
+                let hasher = builder.inst_results(hasher_call)[0];
+
+                let counter = builder.ins().iconst(types::I64, self.counter);
+                self.counter += 1;
+
+                let tag = builder.ins().iconst(
+                    types::I64,
+                    MirDataType::Int.type_tag(self.registry.enums()) as i64,
+                );
+
+                let hash_add_ref = module.declare_func_in_func(hash_add_id, builder.func);
+
+                builder.ins().call(hash_add_ref, &[hasher, tag, counter]);
+
+                for (i, param) in params.iter().enumerate() {
+                    if extern_fn.memo_params != 0 && (extern_fn.memo_params & (1 << i)) == 0 {
+                        continue;
+                    }
+
+                    let value = block_params[i];
+
+                    let payload = match builder.func.dfg.value_type(value) {
+                        types::F64 => builder
+                            .ins()
+                            .bitcast(types::I64, MachMemFlags::new(), value),
+                        types::I8 => builder.ins().uextend(types::I64, value),
+                        types::I32 => builder.ins().sextend(types::I64, value),
+                        _ => value,
+                    };
+
+                    let tag = builder
+                        .ins()
+                        .iconst(types::I64, param.type_tag(self.registry.enums()) as i64);
+
+                    builder.ins().call(hash_add_ref, &[hasher, tag, payload]);
+                }
+
+                let hash_finish_ref = module.declare_func_in_func(hash_finish_id, builder.func);
+                let hash_call = builder.ins().call(hash_finish_ref, &[hasher]);
+                let hash = builder.inst_results(hash_call)[0];
+
+                let contains_ref = module.declare_func_in_func(memo_contains_id, builder.func);
+                let contains_call = builder.ins().call(contains_ref, &[hash]);
+                let contains = builder.inst_results(contains_call)[0];
+
+                let hit_block = builder.create_block();
+                let miss_block = builder.create_block();
+
+                builder
+                    .ins()
+                    .brif(contains, hit_block, &[], miss_block, &[]);
+                builder.switch_to_block(hit_block);
+
+                let get_ref = module.declare_func_in_func(memo_get_id, builder.func);
+                let get_call = builder.ins().call(get_ref, &[hash]);
+                let cached = builder.inst_results(get_call)[0];
+
+                if let Some(ty) = return_cl_ty {
+                    let value = if ty == types::F64 {
+                        builder
+                            .ins()
+                            .bitcast(types::F64, MachMemFlags::new(), cached)
+                    } else if ty == types::I8 {
+                        builder.ins().ireduce(types::I8, cached)
+                    } else if ty == types::I32 {
+                        builder.ins().ireduce(types::I32, cached)
+                    } else {
+                        cached
+                    };
+
+                    builder.ins().return_(&[value]);
+                } else {
+                    builder.ins().return_(&[]);
+                }
+
+                builder.switch_to_block(miss_block);
+                Some(hash)
+            } else {
+                None
+            };
 
             let slot = builder.create_sized_stack_slot(StackSlotData::new(
                 StackSlotKind::ExplicitSlot,
@@ -640,6 +752,11 @@ impl CompilerData {
             );
 
             let result = builder.inst_results(call)[0];
+
+            if let (Some(hash), Some((_, _, _, _, _, memo_set_id))) = (memo_hash, memo_funcs) {
+                let memo_set_ref = module.declare_func_in_func(memo_set_id, builder.func);
+                builder.ins().call(memo_set_ref, &[hash, result]);
+            }
 
             if let Some(ty) = return_cl_ty {
                 let value = if ty == types::F64 {

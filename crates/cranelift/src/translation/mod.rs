@@ -133,7 +133,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         Ok(())
     }
 
-    pub fn box_value(
+    pub(crate) fn box_value(
         &mut self,
         data_type: &MirDataType,
         value: CompiledValue,
@@ -144,7 +144,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         self.runtime_call("calibre_value_cell_new", &[tag, payload])
     }
 
-    pub fn load_boxed(
+    pub(crate) fn _load_boxed(
         &mut self,
         cell: Value,
         data_type: &MirDataType,
@@ -153,7 +153,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         Ok(self.convert_from_i64(payload, data_type))
     }
 
-    pub fn store_boxed(
+    pub(crate) fn store_boxed(
         &mut self,
         boxed: CompiledValue,
         value: CompiledValue,
@@ -337,6 +337,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             self.self_env = Some(env);
 
             for (i, capture) in function.captures.iter().enumerate() {
+                let data_type = capture.data_type.clone().unwrap_ffi();
+
                 if !capture.mutable && self.functions.contains_key(&capture.name) {
                     let func_id = self
                         .function_ids
@@ -355,12 +357,12 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                     let closure =
                         self.runtime_call("calibre_fn_closure_new", &[field_count, func_ptr])?;
 
-                    let cl_ty = self.types.to_cranelift_type(&capture.data_type);
+                    let cl_ty = self.types.to_cranelift_type(&data_type);
                     let var = self.builder.declare_var(cl_ty);
 
                     self.builder.def_var(var, closure);
                     self.variables
-                        .insert(capture.name.clone(), (capture.data_type.clone(), var));
+                        .insert(capture.name.clone(), (data_type.clone(), var));
 
                     continue;
                 }
@@ -378,16 +380,16 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 if capture.mutable {
                     self.boxed_vars.insert(
                         capture.name.clone(),
-                        CompiledValue::new(payload, capture.data_type.clone()),
+                        CompiledValue::new(payload, data_type.clone()),
                     );
                 } else {
-                    let cl_ty = self.types.to_cranelift_type(&capture.data_type);
+                    let cl_ty = self.types.to_cranelift_type(&data_type);
                     let var = self.builder.declare_var(cl_ty);
-                    let value = self.convert_from_i64(payload, &capture.data_type);
+                    let value = self.convert_from_i64(payload, &data_type);
 
                     self.builder.def_var(var, value);
                     self.variables
-                        .insert(capture.name.clone(), (capture.data_type.clone(), var));
+                        .insert(capture.name.clone(), (data_type.clone(), var));
                 }
             }
         }

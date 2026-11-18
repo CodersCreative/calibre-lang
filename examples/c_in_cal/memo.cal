@@ -1,0 +1,20 @@
+type Bytes := struct { first second third : @i64 };
+
+@pure(memo)
+extern "c" const bytes_sum := fn(Bytes) -> @i64 from "libcalffi" as "bytes_sum";
+
+@pure(memo)
+extern "c" const c_abs := fn(@int) -> @int from "libc" as "abs";
+
+const main := fn => {
+    let x := Bytes { first : 1, second : 2, third : 4 };
+    let y := Bytes { first : 1, second : 2, third : 4 };
+    let z := Bytes { first : 9, second : 2, third : 4 };
+
+    print(bytes_sum(x));
+    print(bytes_sum(y));
+    print(bytes_sum(z));
+    
+    print(c_abs(-7));
+    print(c_abs(-7));
+};
