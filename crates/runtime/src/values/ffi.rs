@@ -58,6 +58,8 @@ impl From<FFI> for Type {
 static SYMBOLS: LazyLock<Mutex<HashMap<(String, String), usize>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+static LIBRARIES: LazyLock<Mutex<Vec<Library>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
 fn library_candidates(library: &str) -> Vec<String> {
     let has_path = library.contains('/') || library.contains('\\');
     let lower = library.to_ascii_lowercase();
@@ -154,7 +156,11 @@ fn resolve_symbol(library: &str, symbol: &str) -> Result<usize, String> {
                 match unsafe { lib.get::<*const c_void>(name.as_c_str()) } {
                     Ok(sym) => {
                         resolved = Some(*sym as usize);
-                        drop(lib);
+
+                        if let Ok(mut libs) = LIBRARIES.lock() {
+                            libs.push(lib);
+                        }
+
                         break;
                     }
                     Err(e) => last_err = e.to_string(),
@@ -377,7 +383,7 @@ pub extern "C" fn calibre_ffi_call(
                 let agg = payload as *mut GcAggregate;
 
                 let (bytes, fields) = pack_struct(agg);
-                let mut backing = Vec::with_capacity(bytes.len().div_ceil(8));
+                let mut backing: Vec<u64> = Vec::with_capacity(bytes.len().div_ceil(8));
 
                 if !bytes.is_empty() {
                     backing.resize(bytes.len().div_ceil(8), 0);
@@ -458,7 +464,14 @@ pub extern "C" fn calibre_ffi_call(
         slots.push(Box::new(slot));
     }
 
-    let arg_types: Vec<Type> = slots.iter().map(|s| Type::from(s.kind)).collect();
+    let arg_types: Vec<Type> = slots
+        .iter()
+        .map(|s| match s.kind {
+            FFI::Struct => Type::structure(s.fields.clone()),
+            _ => Type::from(s.kind),
+        })
+        .collect();
+
     let ffi_args: Vec<Arg> = slots.iter().map(|s| Arg::from(&**s)).collect();
 
     if return_kind == FFI::Struct {

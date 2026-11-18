@@ -5,8 +5,12 @@ use crate::{
 use calibre_lir::{
     MirDataType, TypeKey,
     ast::{LirAggregate, LirEnum, LirList, LirLiteral, LirRange},
+    environment::LirType,
 };
-use cranelift::codegen::ir::{InstBuilder, MachMemFlags, types};
+use cranelift::codegen::{
+    FxHashMap,
+    ir::{InstBuilder, MachMemFlags, types},
+};
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -180,7 +184,30 @@ impl CraneliftTranslation for LirAggregate {
             .module
             .declare_func_in_func(*set_field_func_id, translator.builder.func);
 
-        self.fields.sort_by_key(|(k, _)| *k);
+        let order = self
+            .name
+            .as_ref()
+            .and_then(|name| match translator.registry.types.get(name) {
+                Some(LirType::Struct(fields)) => Some(
+                    fields
+                        .0
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (field, _))| (*field, i))
+                        .collect::<FxHashMap<_, _>>(),
+                ),
+                _ => None,
+            });
+
+        if let Some(order) = order {
+            self.fields
+                .0
+                .sort_by_key(|(name, _)| order.get(name).copied().unwrap_or(usize::MAX));
+        } else {
+            self.fields
+                .0
+                .sort_by_key(|(name, _)| name.as_str().parse::<usize>().unwrap_or(usize::MAX));
+        }
 
         let mut field_types = Vec::new();
 

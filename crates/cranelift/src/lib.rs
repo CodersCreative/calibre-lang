@@ -10,7 +10,6 @@ use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::Span;
 use cranelift::codegen::ir::MachMemFlags;
-use cranelift::codegen::ir::immediates::Offset32;
 use cranelift::codegen::isa::CallConv;
 use cranelift::codegen::print_errors::pretty_verifier_error;
 use cranelift::codegen::settings;

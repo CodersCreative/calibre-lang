@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Path resolution of libraries is failing
 type Bytes := struct { first second third : @i64 };
 
 extern "c" const c_abs := fn(@int) -> @int from "libc" as "abs";

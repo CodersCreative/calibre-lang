@@ -1,7 +1,6 @@
-use calibre_lir::{MirDataType, ast::LirNodeType, environment::LirFunction};
+use calibre_lir::MirDataType;
 use calibre_parser::ast::ffi::ParserFfiInnerType;
-use calibre_runtime::values::ffi::{self, FFI};
-use cranelift::prelude::{Type, types};
+use calibre_runtime::values::ffi::FFI;
 
 pub fn ffi_kind(data_type: &MirDataType) -> FFI {
     match data_type.unwrap_all_refs() {

@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Path resolution of libraries is failing
 type Point := struct { x y : @i64 };
 
 extern "zig" const zig_add := fn(@i32, @i32) -> @i32 from "libffi" as "zig_add";

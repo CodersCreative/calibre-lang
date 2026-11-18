@@ -444,10 +444,32 @@ impl MirDataType {
         match self {
             MirDataType::Null => 0,
             MirDataType::Bool => 1,
-            MirDataType::Int => 2,
-            MirDataType::UInt => 3,
+            MirDataType::Int
+            | MirDataType::FfiType(ParserFfiInnerType::I8)
+            | MirDataType::FfiType(ParserFfiInnerType::I16)
+            | MirDataType::FfiType(ParserFfiInnerType::I32)
+            | MirDataType::FfiType(ParserFfiInnerType::I64)
+            | MirDataType::FfiType(ParserFfiInnerType::SChar)
+            | MirDataType::FfiType(ParserFfiInnerType::Long)
+            | MirDataType::FfiType(ParserFfiInnerType::LongLong)
+            | MirDataType::FfiType(ParserFfiInnerType::Short)
+            | MirDataType::FfiType(ParserFfiInnerType::ISize)
+            | MirDataType::FfiType(ParserFfiInnerType::Int) => 2,
+            MirDataType::UInt
+            | MirDataType::FfiType(ParserFfiInnerType::U8)
+            | MirDataType::FfiType(ParserFfiInnerType::U16)
+            | MirDataType::FfiType(ParserFfiInnerType::U32)
+            | MirDataType::FfiType(ParserFfiInnerType::U64)
+            | MirDataType::FfiType(ParserFfiInnerType::UChar)
+            | MirDataType::FfiType(ParserFfiInnerType::ULong)
+            | MirDataType::FfiType(ParserFfiInnerType::ULongLong)
+            | MirDataType::FfiType(ParserFfiInnerType::UShort)
+            | MirDataType::FfiType(ParserFfiInnerType::USize)
+            | MirDataType::FfiType(ParserFfiInnerType::UInt) => 3,
             MirDataType::Byte => 4,
-            MirDataType::Float => 5,
+            MirDataType::Float
+            | MirDataType::FfiType(ParserFfiInnerType::F32)
+            | MirDataType::FfiType(ParserFfiInnerType::F64) => 5,
             MirDataType::Big => 6,
             MirDataType::Str => 7,
             MirDataType::Char => 8,
