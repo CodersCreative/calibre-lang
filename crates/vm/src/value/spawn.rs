@@ -130,6 +130,13 @@ pub struct MutexGuardInner {
 }
 
 impl MutexGuardInner {
+    pub fn unlocked(inner: Arc<MutexInner>) -> Self {
+        Self {
+            inner,
+            released: AtomicBool::new(true),
+        }
+    }
+
     pub fn get_clone(&self) -> RuntimeValue {
         self.inner.get_clone()
     }

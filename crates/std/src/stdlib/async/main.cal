@@ -2,7 +2,7 @@ type Channel:<T> := struct { inner : host };
 type WaitGroup := struct { inner : host };
 type Mutex:<T> := struct { inner : host };
 
-type LazyLock:<T> := struct { inner : Mutex:<T?>, init_fn : fn () -> T };
+type LazyLock:<T> := struct { inner : host, init_fn : fn () -> T };
 
 impl<T> Channel:<T> {
 	const new := fn -> Channel:<T> => return Channel:<T> { inner : channel_new() };
@@ -27,6 +27,8 @@ impl WaitGroup {
 
 	const raw_new := fn (inner : host) -> WaitGroup => return WaitGroup { inner };
 
+	const raw_add := fn (self : &mut WaitGroup, n : int) => waitgroup_raw_add(self.inner, n);
+
 	const raw_done := fn (self : &mut WaitGroup) => waitgroup_raw_done(self.inner);
 
 	const wait := fn (self : &WaitGroup) => waitgroup_wait(self.inner);
@@ -44,46 +46,58 @@ impl<T> Mutex:<T> {
 
 	const set := fn (self : &mut Mutex:<T>, value : T) => mutex_set(self.inner, value);
 
-	@ignore_invalid_return const with := fn <U> (self : &mut Mutex:<T>, op : fn (T) -> U) -> U => return mutex_with(self.inner, op);
+	@ignore_invalid_return const with := fn <U> (self : &mut Mutex:<T>, op : fn (T) -> U) -> U => {
+		let cur : &mut T = mutex_get(self.inner);
+		let result := op(cur.*);
+		mutex_set(self.inner, result);
+
+		return result;
+	};
 
 	const write := fn (self : &mut Mutex:<T>) -> &mut T => return mutex_write(self.inner);
 
 	const swap := fn (self : &mut Mutex:<T>, value : T) -> T => {
 		let current := self.get();
 		self.set(value);
-		return current;
+		return current.*;
 	};
 
 	const update := fn (self : &mut Mutex:<T>, op : fn (T) -> T) => {
-		let current := self.get();
-		self.set(op(current));
+		let cur : &mut T = mutex_get(self.inner);
+		mutex_set(self.inner, op(cur.*));
 	};
 };
 
 impl<T> LazyLock:<T> {
-	const new := fn (init_fn : fn () -> T) -> LazyLock:<T> => return LazyLock:<T> { inner : Mutex:<T>.new(), init_fn };
-
-	@ignore_invalid_return const get := fn (self : &Self) -> &mut T? => return self.inner.get();
-
-	@ignore_invalid_return const get_or_init := fn (self : &Self) -> &mut T => {
-		let mut value : <&mut T>? = self.inner.get();
-		match value {
-			.Some : let x => return x,
-			.None => {
-				value.* := self.init_fn();
-				return try value => panic();
-			}
-		};
+	const new := fn (init_fn : fn () -> T) -> LazyLock:<T> => {
+		return LazyLock:<T> { inner : mutex_new(none), init_fn };
 	};
 
-	@ignore_invalid_return const get_or_set := fn (self : &Self, default : T) -> &mut T => {
-		let mut value : <&mut T>? = self.inner.get();
-		match value {
-			.Some : let x => return x,
-			.None => {
-				value.* := default;
-				return try value => panic();
-			}
-		};
+	const get := fn (self : &Self) -> T? => {
+		return mutex_get(self.inner).*
+	};
+
+	const get_or_init := fn (self : &Self) -> T => {
+		let cur : T? = mutex_get(self.inner).*;
+		if let .Some : let x <- cur => return x;
+
+		mutex_set(self.inner, some(self.init_fn()));
+
+		let cur : T? = mutex_get(self.inner).*;
+		if let .Some : let x <- cur => return x;
+		
+		panic("LazyLock init failed");
+	};
+
+	const get_or_set := fn (self : &Self, default : T) -> T => {
+		let cur : T? = mutex_get(self.inner).*;
+		if let .Some : let x <- cur => return x;
+
+		mutex_set(self.inner, some(default));
+
+		let cur : T? = mutex_get(self.inner).*;
+		if let .Some : let x <- cur => return x;
+		
+		panic("LazyLock init failed");
 	};
 };

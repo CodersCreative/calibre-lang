@@ -28,6 +28,12 @@ pub struct GcHost {
 }
 
 impl GcHost {
+    pub fn new(data: impl HostInner + 'static) -> Self {
+        GcHost {
+            data: Box::new(data),
+        }
+    }
+
     pub fn alloc(self) -> *mut GcHost {
         let header = register_alloc(GcObject::Host(self));
 

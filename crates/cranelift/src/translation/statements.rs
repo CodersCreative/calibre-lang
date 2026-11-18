@@ -21,7 +21,7 @@ impl CraneliftTranslation for LirDeclare {
             .value
             .translate(translator, Some(self.data_type.clone()))?;
 
-        if translator.mutable_captures.contains(&self.dest) {
+        if self.is_referenced || translator.mutable_captures.contains(&self.dest) {
             let value = translator.box_value(&self.data_type, value)?;
 
             translator.boxed_vars.insert(

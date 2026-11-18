@@ -345,10 +345,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Struct {
-                        identifier: TypeKey::from("1"),
-                        generic_types: Vec::new(),
-                    }))),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
                 },
             ),
             (
@@ -357,10 +354,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Result {
-                        ok: Box::new(MirDataType::Struct {
-                            identifier: TypeKey::from("1"),
-                            generic_types: Vec::new(),
-                        }),
+                        ok: Box::new(MirDataType::Dynamic),
                         err: Box::new(MirDataType::Dynamic),
                     }),
                 },
@@ -372,10 +366,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Result {
                         ok: Box::new(MirDataType::Dynamic),
-                        err: Box::new(MirDataType::Struct {
-                            identifier: TypeKey::from("1"),
-                            generic_types: Vec::new(),
-                        }),
+                        err: Box::new(MirDataType::Dynamic),
                     }),
                 },
             ),
@@ -1246,6 +1237,142 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     }),
                 },
             ),
+            // async
+            (
+                "calibre_channel_new",
+                RuntimeFunction {
+                    params: vec![],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_channel_send",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_channel_get",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
+                "calibre_channel_close",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_channel_closed",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_mutex_new",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_mutex_get",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_mutex_set",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_mutex_write",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_waitgroup_new",
+                RuntimeFunction {
+                    params: vec![],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_waitgroup_raw_add",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_waitgroup_raw_done",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_waitgroup_join",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_waitgroup_wait",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_waitgroup_count",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Int),
+                },
+            ),
         ];
 
         lst.into_iter().collect()
@@ -1343,6 +1470,22 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("fs.dir_create_all", "calibre_fs_dir_create_all"),
             ("fs.dir_remove", "calibre_fs_dir_remove"),
             ("fs.dir_remove_all", "calibre_fs_dir_remove_all"),
+            // async
+            ("async.channel_new", "calibre_channel_new"),
+            ("async.channel_send", "calibre_channel_send"),
+            ("async.channel_get", "calibre_channel_get"),
+            ("async.channel_close", "calibre_channel_close"),
+            ("async.channel_closed", "calibre_channel_closed"),
+            ("async.mutex_new", "calibre_mutex_new"),
+            ("async.mutex_get", "calibre_mutex_get"),
+            ("async.mutex_set", "calibre_mutex_set"),
+            ("async.mutex_write", "calibre_mutex_write"),
+            ("async.waitgroup_new", "calibre_waitgroup_new"),
+            ("async.waitgroup_raw_add", "calibre_waitgroup_raw_add"),
+            ("async.waitgroup_raw_done", "calibre_waitgroup_raw_done"),
+            ("async.waitgroup_join", "calibre_waitgroup_join"),
+            ("async.waitgroup_wait", "calibre_waitgroup_wait"),
+            ("async.waitgroup_count", "calibre_waitgroup_count"),
         ];
 
         lst.into_iter().collect()

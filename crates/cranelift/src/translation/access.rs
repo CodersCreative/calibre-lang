@@ -250,7 +250,8 @@ impl CraneliftTranslation for LirDiscriminant {
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let value = self.value.translate(translator, None)?;
 
-        let is_enum = if let MirDataType::Struct { identifier, .. } = &value.data_type
+        let is_enum = if let MirDataType::Struct { identifier, .. } =
+            value.data_type.unwrap_all_refs()
             && let Some(lir_type) = translator.registry.types.get(identifier)
         {
             matches!(lir_type, LirType::Enum(_))
@@ -259,7 +260,7 @@ impl CraneliftTranslation for LirDiscriminant {
         };
 
         if matches!(
-            &value.data_type,
+            value.data_type.unwrap_all_refs(),
             MirDataType::Option(_) | MirDataType::Result { .. }
         ) || is_enum
         {
@@ -274,7 +275,12 @@ impl CraneliftTranslation for LirDiscriminant {
                 .module
                 .declare_func_in_func(*func_id, translator.builder.func);
 
-            let call = translator.builder.ins().call(func_ref, &[value.value]);
+            let mut arg = value.value;
+            if matches!(value.data_type, MirDataType::Ref(_, _)) {
+                arg = translator.runtime_call("calibre_deref", &[arg])?;
+            }
+
+            let call = translator.builder.ins().call(func_ref, &[arg]);
             let result = translator.builder.inst_results(call)[0];
 
             Ok(CompiledValue::new(result, MirDataType::UInt))

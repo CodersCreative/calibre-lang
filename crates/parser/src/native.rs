@@ -521,8 +521,8 @@ impl ParserDataType {
                 ),
                 (
                     "async.mutex_new",
-                    vec![ParserInnerType::Host],
-                    ParserInnerType::Null,
+                    vec![ParserInnerType::Dynamic],
+                    ParserInnerType::Host,
                 ),
                 (
                     "async.mutex_get",
@@ -531,13 +531,13 @@ impl ParserDataType {
                 ),
                 (
                     "async.mutex_set",
-                    vec![ParserInnerType::Host],
+                    vec![ParserInnerType::Host, ParserInnerType::Dynamic],
                     ParserInnerType::Null,
                 ),
                 (
                     "async.mutex_with",
                     vec![ParserInnerType::Host, ParserInnerType::Dynamic],
-                    ParserInnerType::Null,
+                    ParserInnerType::Dynamic,
                 ),
                 (
                     "async.mutex_write",

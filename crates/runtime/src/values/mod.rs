@@ -107,7 +107,6 @@ pub extern "C" fn calibre_deref(val: *mut Value) -> i64 {
     if val.is_null() {
         return 0;
     }
-
     unsafe { i64::from((*val).clone()) }
 }
 

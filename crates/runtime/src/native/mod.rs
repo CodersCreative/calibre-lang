@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+pub mod r#async;
 pub mod console;
 pub mod crypto;
 pub mod env;

@@ -160,7 +160,12 @@ impl CraneliftTranslation for LirCall {
                     arg_index, runtime_name, sig.params.len(), self.args.len()
                 ))?;
 
-                let value = arg.clone().translate(translator, None)?;
+                let mut value = arg.clone().translate(translator, None)?;
+
+                while let MirDataType::Ref(inner, _) = value.data_type.clone() {
+                    let payload = translator.runtime_call("calibre_deref", &[value.value])?;
+                    value = CompiledValue::new(payload, *inner);
+                }
 
                 arg_types.push(value.data_type.clone());
 

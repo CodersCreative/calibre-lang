@@ -10,7 +10,7 @@ use crate::{
     },
     value::{
         RuntimeValue, ValueSlot,
-        spawn::{ChannelInner, MutexInner, WaitGroupInner},
+        spawn::{ChannelInner, MutexGuardInner, MutexInner, WaitGroupInner},
     },
 };
 use std::{
@@ -332,7 +332,8 @@ impl NativeFunction for MutexWrite {
 
         let m = resolve_mutex(env, pop_or_null(&mut args))?;
 
-        let guard = m.lock();
-        Ok(RuntimeValue::MutexGuard(Arc::new(guard)))
+        Ok(RuntimeValue::MutexGuard(Arc::new(
+            MutexGuardInner::unlocked(m),
+        )))
     }
 }

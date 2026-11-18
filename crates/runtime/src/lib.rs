@@ -1,5 +1,5 @@
 use crate::{
-    native::fs,
+    native::{r#async, fs},
     values::{aggregate, big, clone, enums, hasher, list, operation, range, reader, string},
 };
 use astro_float::RoundingMode;
@@ -527,6 +527,67 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_fs_dir_remove_all",
             ptr: fs::calibre_fs_dir_remove_all as *const u8,
+        },
+        // native async
+        RuntimeSymbol {
+            name: "calibre_channel_new",
+            ptr: r#async::calibre_channel_new as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_channel_send",
+            ptr: r#async::calibre_channel_send as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_channel_get",
+            ptr: r#async::calibre_channel_get as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_channel_close",
+            ptr: r#async::calibre_channel_close as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_channel_closed",
+            ptr: r#async::calibre_channel_closed as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_mutex_new",
+            ptr: r#async::calibre_mutex_new as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_mutex_get",
+            ptr: r#async::calibre_mutex_get as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_mutex_set",
+            ptr: r#async::calibre_mutex_set as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_mutex_write",
+            ptr: r#async::calibre_mutex_write as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_waitgroup_new",
+            ptr: r#async::calibre_waitgroup_new as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_waitgroup_raw_add",
+            ptr: r#async::calibre_waitgroup_raw_add as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_waitgroup_raw_done",
+            ptr: r#async::calibre_waitgroup_raw_done as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_waitgroup_join",
+            ptr: r#async::calibre_waitgroup_join as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_waitgroup_wait",
+            ptr: r#async::calibre_waitgroup_wait as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_waitgroup_count",
+            ptr: r#async::calibre_waitgroup_count as *const u8,
         },
     ]
 }
