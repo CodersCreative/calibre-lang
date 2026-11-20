@@ -35,7 +35,7 @@ impl Hash for ChannelState {
 
 impl ChannelState {
     pub fn from_ptr(ptr: *mut GcHost) -> Option<&'static Self> {
-        GcHost::downcast::<ChannelState>(ptr)
+        GcHost::downcast_ref::<ChannelState>(ptr)
     }
 }
 
@@ -73,7 +73,7 @@ impl MutexState {
     }
 
     pub fn from_ptr(ptr: *mut GcHost) -> Option<&'static Self> {
-        GcHost::downcast::<MutexState>(ptr)
+        GcHost::downcast_ref::<MutexState>(ptr)
     }
 }
 
@@ -152,7 +152,7 @@ impl WaitGroupState {
     }
 
     pub fn from_ptr(ptr: *mut GcHost) -> Option<&'static Self> {
-        GcHost::downcast::<WaitGroupState>(ptr)
+        GcHost::downcast_ref::<WaitGroupState>(ptr)
     }
 }
 

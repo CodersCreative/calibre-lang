@@ -88,7 +88,7 @@ impl CraneliftTranslation for LirLiteral {
                     translator.types.ptr(),
                     MachMemFlags::new(),
                     ptr,
-                    translator.layouts.pointer_bytes() as i32,
+                    translator.types.pointer_bytes() as i32,
                 );
 
                 for (i, &byte) in s.as_bytes().iter().enumerate() {

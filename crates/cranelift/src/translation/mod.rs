@@ -1,4 +1,3 @@
-use crate::layout::Layouts;
 use crate::natives::{Natives, build_native_mapping};
 use crate::values::{CompiledValue, CraneliftTypes};
 use crate::{Functions, Globals, RuntimeFunctions};
@@ -36,7 +35,6 @@ pub type Variables = FxHashMap<VariableKey, (MirDataType, Variable)>;
 
 pub struct FunctionTranslator<'a, M: Module> {
     pub types: &'a CraneliftTypes,
-    pub layouts: &'a mut Layouts,
     pub builder: FunctionBuilder<'a>,
     pub module: &'a mut M,
     pub variables: Variables,
@@ -64,7 +62,6 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         module: &'a mut M,
         registry: &'a LirRegistry,
         types: &'a CraneliftTypes,
-        layouts: &'a mut Layouts,
         globals: &'a Globals,
         functions: &'a Functions,
         runtime_functions: &'a RuntimeFunctions,
@@ -80,7 +77,6 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             builder,
             module,
             registry,
-            layouts,
             variables: FxHashMap::default(),
             boxed_vars: FxHashMap::default(),
             mutable_captures: FxHashSet::default(),

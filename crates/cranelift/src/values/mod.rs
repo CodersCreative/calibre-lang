@@ -4,40 +4,56 @@ use cranelift::prelude::{Type, Value, types};
 
 #[derive(Clone, Copy, Debug)]
 pub struct CraneliftTypes {
+    ptr_bit_width: u32,
     ptr: Type,
 }
 
 impl CraneliftTypes {
     pub fn new(ptr: Type) -> Self {
-        Self { ptr }
+        Self {
+            ptr_bit_width: ptr.bits(),
+            ptr,
+        }
     }
 
+    #[inline(always)]
     pub fn ptr(&self) -> Type {
         self.ptr
     }
 
+    #[inline(always)]
     pub fn int(&self) -> Type {
         types::I64
     }
 
+    #[inline(always)]
     pub fn uint(&self) -> Type {
         types::I64
     }
 
+    #[inline(always)]
     pub fn float(&self) -> Type {
         types::F64
     }
 
+    #[inline(always)]
     pub fn bool(&self) -> Type {
         types::I8
     }
 
+    #[inline(always)]
     pub fn byte(&self) -> Type {
         types::I8
     }
 
+    #[inline(always)]
     pub fn char(&self) -> Type {
         types::I32
+    }
+
+    #[inline(always)]
+    pub fn pointer_bytes(&self) -> u32 {
+        self.ptr_bit_width / 8
     }
 
     pub fn to_cranelift_type(&self, ty: &MirDataType) -> Type {

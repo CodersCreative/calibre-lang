@@ -1351,7 +1351,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![
                         (types::I64, ArgumentKind::Direct),
-                        (types::I64, ArgumentKind::TagPayload),
+                        (types::I64, ArgumentKind::Direct),
                     ],
                     returns: None,
                     typed_return: None,

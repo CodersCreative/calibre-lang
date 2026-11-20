@@ -1,4 +1,3 @@
-use crate::layout::Layouts;
 use crate::natives::{ArgumentKind, runtime_functions};
 use crate::translation::FunctionTranslator;
 use crate::values::{CompiledValue, CraneliftTypes};
@@ -23,7 +22,6 @@ use rustc_hash::FxHashMap;
 use std::error::Error;
 use std::sync::Arc;
 
-pub mod layout;
 pub mod natives;
 pub mod translation;
 pub mod values;
@@ -39,7 +37,6 @@ pub struct CompilerData {
     types: CraneliftTypes,
     functions: Functions,
     globals: Globals,
-    layouts: Layouts,
     runtime_functions: RuntimeFunctions,
     function_ids: FxHashMap<VariableKey, FuncId>,
     extern_functions: FxHashMap<VariableKey, (LirExtern, Vec<MirDataType>, MirDataType)>,
@@ -197,11 +194,9 @@ impl CompilerData {
             self.globals
                 .insert(key.clone(), (global.data_type.clone(), data_id));
 
-            if let Some(layout) = self.layouts.get_layout(&global.data_type) {
-                let mut data = DataDescription::new();
-                data.define_zeroinit(layout.size as usize);
-                module.define_data(data_id, &data)?;
-            }
+            let mut data = DataDescription::new();
+            data.define_zeroinit(8);
+            module.define_data(data_id, &data)?;
         }
 
         for (index, (key, func)) in self.registry.functions.iter().enumerate() {
@@ -305,7 +300,6 @@ impl CompilerData {
                     module,
                     &self.registry,
                     &self.types,
-                    &mut self.layouts,
                     &self.globals,
                     &self.functions,
                     &self.runtime_functions,
@@ -373,7 +367,6 @@ impl CompilerData {
                     module,
                     &self.registry,
                     &self.types,
-                    &mut self.layouts,
                     &self.globals,
                     &self.functions,
                     &self.runtime_functions,
@@ -476,7 +469,6 @@ impl CompilerData {
                 module,
                 &self.registry,
                 &self.types,
-                &mut self.layouts,
                 &self.globals,
                 &self.functions,
                 &self.runtime_functions,
@@ -849,7 +841,6 @@ impl JitCompiler {
         let mut module = JITModule::new(builder);
 
         let ptr_type = module.target_config().pointer_type();
-        let layouts = Layouts::new(Some(&registry), ptr_type.bits());
 
         let ctx = module.make_context();
 
@@ -859,7 +850,6 @@ impl JitCompiler {
             types: CraneliftTypes::new(ptr_type),
             functions: FxHashMap::default(),
             globals: FxHashMap::default(),
-            layouts,
             registry,
             runtime_functions: FxHashMap::default(),
             function_ids: FxHashMap::default(),
@@ -911,7 +901,6 @@ impl AotCompiler {
         let mut module = ObjectModule::new(builder);
 
         let ptr_type = module.target_config().pointer_type();
-        let layouts = Layouts::new(Some(&registry), ptr_type.bits());
 
         let context = module.make_context();
 
@@ -921,7 +910,6 @@ impl AotCompiler {
             types: CraneliftTypes::new(ptr_type),
             functions: FxHashMap::default(),
             globals: FxHashMap::default(),
-            layouts,
             registry,
             runtime_functions: FxHashMap::default(),
             function_ids: FxHashMap::default(),
