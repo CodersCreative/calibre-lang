@@ -1,0 +1,19 @@
+import WaitGroup from std::async;
+
+const worker := fn (id : int) => {
+	let mut sum := 0;
+	let mut i := 0;
+	
+	for i < 500000 => {
+		sum += i * i;
+		i += 1;
+	};
+
+	print("task " & id & " = " & sum)
+}
+
+const main := fn => {
+	spawn@ for i in 64 => worker(i);
+
+	print("all tasks finished");
+};

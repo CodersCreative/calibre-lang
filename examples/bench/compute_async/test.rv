@@ -1,0 +1,20 @@
+fn worker(id) do
+  let sum = 0
+  let i = 0
+  
+  while i < 500000 do
+    sum += i * i
+    i += 1
+  end
+
+  print("task " ~ id ~ " = " ~ sum)
+end
+
+let handles = {}
+for i in 0..64
+  handles:push(spawn(worker(i)))
+
+for h in handles
+  join(h)
+
+print("all tasks finished")
