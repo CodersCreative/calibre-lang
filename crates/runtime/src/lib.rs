@@ -7,6 +7,7 @@ use astro_float::RoundingMode;
 pub mod exit;
 pub mod gc;
 pub mod native;
+pub mod scheduler;
 pub mod values;
 
 pub const BIG_PRECISION: usize = 128;
@@ -588,6 +589,15 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_waitgroup_count",
             ptr: r#async::calibre_waitgroup_count as *const u8,
+        },
+        // scheduler
+        RuntimeSymbol {
+            name: "calibre_spawn_task",
+            ptr: scheduler::calibre_spawn_task as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_scheduler_drain",
+            ptr: scheduler::calibre_scheduler_drain as *const u8,
         },
     ]
 }

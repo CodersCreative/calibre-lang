@@ -50,4 +50,22 @@ impl GcHost {
             }
         }
     }
+
+    pub fn downcast_ref<T: 'static>(ptr: *mut Self) -> Option<&'static T> {
+        if ptr.is_null() {
+            return None;
+        }
+
+        let host = unsafe { &*ptr };
+        (*host.data).as_any().downcast_ref::<T>()
+    }
+
+    pub fn downcast_mut<T: 'static>(ptr: *mut Self) -> Option<&'static mut T> {
+        if ptr.is_null() {
+            return None;
+        }
+
+        let host = unsafe { &mut *ptr };
+        (*host.data).as_any_mut().downcast_mut::<T>()
+    }
 }

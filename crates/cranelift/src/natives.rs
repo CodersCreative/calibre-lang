@@ -1373,6 +1373,23 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: Some(MirDataType::Int),
                 },
             ),
+            // scheduler
+            (
+                "calibre_spawn_task",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_scheduler_drain",
+                RuntimeFunction {
+                    params: vec![],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
         ];
 
         lst.into_iter().collect()

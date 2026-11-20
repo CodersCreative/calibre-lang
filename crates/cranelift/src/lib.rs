@@ -522,6 +522,7 @@ impl CompilerData {
                 translator.runtime_lifecycle_call(&func_key, 1)?;
             }
 
+            translator.runtime_call_void("calibre_scheduler_drain", &[])?;
             translator.runtime_call_void("calibre_exit_flush", &[])?;
 
             translator.builder.ins().return_(&[]);

@@ -36,6 +36,22 @@ impl CraneliftTranslation for LirClosure {
             translator.runtime_call("calibre_fn_closure_new", &[field_count, func_ptr])?;
 
         for (i, capture) in self.captures.iter().enumerate() {
+            if translator.natives.contains_key(&capture.name)
+                || translator.globals.contains_key(&capture.name)
+            {
+                let tag = translator
+                    .int_const(MirDataType::Null.type_tag(translator.registry.enums()) as i64);
+                let index = translator.int_const(i as i64 + 1);
+                let zero = translator.int_const(0);
+
+                translator.runtime_call_void(
+                    "calibre_aggregate_set_field",
+                    &[closure, index, tag, zero],
+                )?;
+
+                continue;
+            }
+
             let (data_type, payload) = if capture.mutable
                 && let Some(value) = translator.boxed_vars.get(&capture.name).cloned()
             {

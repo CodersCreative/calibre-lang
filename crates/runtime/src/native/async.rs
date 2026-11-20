@@ -1,4 +1,7 @@
-use crate::values::{Value, ValueTag, enums::calibre_option_none, host::GcHost};
+use crate::{
+    scheduler::{self, BlockResult},
+    values::{Value, ValueTag, aggregate::GcAggregate, enums::calibre_option_none, host::GcHost},
+};
 use std::{
     cell::UnsafeCell,
     collections::VecDeque,
@@ -32,8 +35,7 @@ impl Hash for ChannelState {
 
 impl ChannelState {
     pub fn from_ptr(ptr: *mut GcHost) -> Option<&'static Self> {
-        let host = unsafe { &*ptr };
-        (*host.data).as_any().downcast_ref::<ChannelState>()
+        GcHost::downcast::<ChannelState>(ptr)
     }
 }
 
@@ -71,8 +73,7 @@ impl MutexState {
     }
 
     pub fn from_ptr(ptr: *mut GcHost) -> Option<&'static Self> {
-        let host = unsafe { &*ptr };
-        (*host.data).as_any().downcast_ref::<MutexState>()
+        GcHost::downcast::<MutexState>(ptr)
     }
 }
 
@@ -101,8 +102,10 @@ impl Hash for WaitGroupState {
 impl WaitGroupState {
     pub fn done(&self) {
         let remaining = self.count.fetch_sub(1, Ordering::AcqRel) - 1;
+
         if remaining <= 0 {
             self.cvar.notify_all();
+            scheduler::wake_all(self as *const Self as usize);
         }
     }
 
@@ -117,11 +120,24 @@ impl WaitGroupState {
     }
 
     pub fn wait(&self) {
-        if let Ok(mut guard) = self.mutex.lock() {
-            while self.count.load(Ordering::Acquire) > 0 {
-                match self.cvar.wait(guard) {
-                    Ok(x) => guard = x,
-                    Err(_) => return,
+        let key = self as *const Self as usize;
+
+        loop {
+            if self.count.load(Ordering::Acquire) <= 0 {
+                break;
+            }
+
+            match scheduler::block_on(key, None, &|| self.count.load(Ordering::Acquire) <= 0) {
+                BlockResult::Woken | BlockResult::TimedOut => continue,
+                BlockResult::Unavailable => {
+                    if let Ok(mut guard) = self.mutex.lock() {
+                        while self.count.load(Ordering::Acquire) > 0 {
+                            match self.cvar.wait(guard) {
+                                Ok(x) => guard = x,
+                                Err(_) => return,
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -136,19 +152,18 @@ impl WaitGroupState {
     }
 
     pub fn from_ptr(ptr: *mut GcHost) -> Option<&'static Self> {
-        let host = unsafe { &*ptr };
-        (*host.data).as_any().downcast_ref::<WaitGroupState>()
+        GcHost::downcast::<WaitGroupState>(ptr)
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_channel_new() -> i64 {
+pub extern "C" fn calibre_channel_new() -> *mut GcHost {
     GcHost::new(ChannelState {
         queue: Mutex::new(VecDeque::new()),
         closed: AtomicBool::new(false),
         cvar: Condvar::new(),
     })
-    .alloc() as i64
+    .alloc()
 }
 
 #[unsafe(no_mangle)]
@@ -161,45 +176,85 @@ pub extern "C" fn calibre_channel_send(host: *mut GcHost, tag: ValueTag, payload
         return false;
     }
 
-    if let Ok(mut queue) = ch.queue.try_lock() {
-        queue.push_back(Value::from_tag(tag, payload));
-        ch.cvar.notify_one();
-    }
+    let Ok(mut queue) = ch.queue.lock() else {
+        return false;
+    };
+
+    queue.push_back(Value::from_tag(tag, payload));
+    ch.cvar.notify_one();
+
+    drop(queue);
+    scheduler::wake_one(host as usize);
 
     true
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_channel_get(host: *mut GcHost, timeout_ms: i64) -> i64 {
+pub extern "C" fn calibre_channel_get(host: *mut GcHost, timeout_ms: i64) -> *mut GcAggregate {
     let Some(ch) = ChannelState::from_ptr(host) else {
-        return calibre_option_none() as i64;
+        return calibre_option_none();
     };
 
-    let Ok(mut guard) = ch.queue.lock() else {
-        return calibre_option_none() as i64;
+    let key = host as usize;
+
+    let timeout = if timeout_ms > 0 {
+        Some(Duration::from_millis(timeout_ms.cast_unsigned()))
+    } else {
+        None
     };
 
     loop {
-        if let Some(value) = guard.pop_front() {
-            return value.some() as i64;
+        if let Ok(mut queue) = ch.queue.try_lock()
+            && let Some(value) = queue.pop_front()
+        {
+            return value.some();
         }
 
         if ch.closed.load(Ordering::Acquire) {
-            return calibre_option_none() as i64;
+            return calibre_option_none();
         }
 
-        match ch.cvar.wait_timeout(
-            guard,
-            Duration::from_millis(timeout_ms.max(0).cast_unsigned()),
-        ) {
-            Ok((g, result)) => {
-                if result.timed_out() {
-                    return calibre_option_none() as i64;
-                }
+        if timeout_ms <= 0 {
+            return calibre_option_none();
+        }
 
-                guard = g;
+        let ready = || {
+            ch.queue.lock().map(|q| !q.is_empty()).unwrap_or(false)
+                || ch.closed.load(Ordering::Acquire)
+        };
+
+        match scheduler::block_on(key, timeout, &ready) {
+            BlockResult::Woken => continue,
+            BlockResult::TimedOut => return calibre_option_none(),
+            BlockResult::Unavailable => {
+                let Ok(mut guard) = ch.queue.lock() else {
+                    return calibre_option_none();
+                };
+
+                loop {
+                    if let Some(value) = guard.pop_front() {
+                        return value.some();
+                    }
+
+                    if ch.closed.load(Ordering::Acquire) {
+                        return calibre_option_none();
+                    }
+
+                    match ch.cvar.wait_timeout(
+                        guard,
+                        Duration::from_millis(timeout_ms.max(0).cast_unsigned()),
+                    ) {
+                        Ok((g, result)) => {
+                            if result.timed_out() {
+                                return calibre_option_none();
+                            }
+
+                            guard = g;
+                        }
+                        Err(_) => return calibre_option_none(),
+                    }
+                }
             }
-            Err(_) => return calibre_option_none() as i64,
         }
     }
 }
@@ -209,6 +264,8 @@ pub extern "C" fn calibre_channel_close(host: *mut GcHost) {
     if let Some(ch) = ChannelState::from_ptr(host) {
         ch.closed.store(true, Ordering::Release);
         ch.cvar.notify_all();
+
+        scheduler::wake_all(host as usize);
     }
 }
 
@@ -226,12 +283,12 @@ pub extern "C" fn calibre_channel_closed(host: *mut GcHost) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_mutex_new(tag: ValueTag, payload: i64) -> i64 {
+pub extern "C" fn calibre_mutex_new(tag: ValueTag, payload: i64) -> *mut GcHost {
     GcHost::new(MutexState {
         lock: Mutex::new(()),
         value: UnsafeCell::new(Value::from_tag(tag, payload)),
     })
-    .alloc() as i64
+    .alloc()
 }
 
 #[unsafe(no_mangle)]
@@ -241,7 +298,7 @@ pub extern "C" fn calibre_mutex_get(host: *mut GcHost) -> i64 {
     };
 
     let _guard = m.lock.lock();
-    Box::into_raw(Box::new(m.get_clone())) as i64
+    i64::from(m.get_clone())
 }
 
 #[unsafe(no_mangle)]
@@ -252,27 +309,28 @@ pub extern "C" fn calibre_mutex_set(host: *mut GcHost, tag: ValueTag, payload: i
 
     let _guard = m.lock.lock();
     let old = m.set_value(Value::from_tag(tag, payload));
-    Box::into_raw(Box::new(old)) as i64
+
+    i64::from(old)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_mutex_write(host: *mut GcHost) -> i64 {
+pub extern "C" fn calibre_mutex_write(host: *mut GcHost) -> *mut Value {
     let Some(m) = MutexState::from_ptr(host) else {
-        return 0;
+        return std::ptr::null_mut();
     };
 
-    m.get_ptr() as i64
+    m.get_ptr()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_waitgroup_new() -> i64 {
+pub extern "C" fn calibre_waitgroup_new() -> *mut GcHost {
     GcHost::new(WaitGroupState {
         count: AtomicIsize::new(0),
         mutex: Mutex::new(()),
         cvar: Condvar::new(),
         joined: Mutex::new(Vec::new()),
     })
-    .alloc() as i64
+    .alloc()
 }
 
 #[unsafe(no_mangle)]
@@ -308,4 +366,20 @@ pub extern "C" fn calibre_waitgroup_count(host: *mut GcHost) -> i64 {
     WaitGroupState::from_ptr(host)
         .map(|wg| wg.count.load(Ordering::Acquire) as i64)
         .unwrap_or(0)
+}
+
+pub fn waitgroup_new_host() -> *mut GcHost {
+    GcHost::new(WaitGroupState {
+        count: AtomicIsize::new(1),
+        mutex: Mutex::new(()),
+        cvar: Condvar::new(),
+        joined: Mutex::new(Vec::new()),
+    })
+    .alloc()
+}
+
+pub fn waitgroup_host_done(ptr: *mut GcHost) {
+    if let Some(wg) = WaitGroupState::from_ptr(ptr) {
+        wg.done();
+    }
 }

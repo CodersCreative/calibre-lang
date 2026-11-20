@@ -16,8 +16,8 @@ pub extern "C" fn calibre_fn_closure_new(field_count: i64, payload: i64) -> i64 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_fn_entry(closure: i64) -> i64 {
-    calibre_aggregate_get_field_and_deref(closure as *mut GcAggregate, 0)
+pub extern "C" fn calibre_fn_entry(closure: *mut GcAggregate) -> i64 {
+    calibre_aggregate_get_field_and_deref(closure, 0)
 }
 
 #[unsafe(no_mangle)]

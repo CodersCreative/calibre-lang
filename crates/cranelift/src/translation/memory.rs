@@ -5,7 +5,7 @@ use crate::{
 use calibre_lir::{Key, ast::LirClone};
 use calibre_lir::{
     MirDataType,
-    ast::{LirDrop, LirLoad, LirMove},
+    ast::{LirDrop, LirLoad, LirMove, LirSpawn},
 };
 use cranelift::codegen::ir::{InstBuilder, MachMemFlags};
 use cranelift_module::Module;
@@ -177,6 +177,20 @@ impl CraneliftTranslation for LirClone {
             translator.builder.inst_results(call)[0],
             data_type.unwrap_all_refs().clone(),
         ))
+    }
+}
+
+impl CraneliftTranslation for LirSpawn {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let closure = self.value.translate(translator, None)?;
+        let closure = translator.convert_to_i64(closure)?;
+        let waitgroup = translator.runtime_call("calibre_spawn_task", &[closure])?;
+
+        Ok(CompiledValue::new(waitgroup, MirDataType::Host))
     }
 }
 

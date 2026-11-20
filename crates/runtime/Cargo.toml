@@ -28,6 +28,12 @@ dyn-hash = "1"
 libffi = { version = "5", features = ["system"], optional = true }
 libloading = { version = "0.9", optional = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+may = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rayon = "1"
+
 [features]
 ffi = ["dep:libffi", "dep:libloading"]
 
