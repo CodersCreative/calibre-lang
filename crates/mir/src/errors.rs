@@ -173,6 +173,12 @@ pub enum MiddleErr {
     UnreachableMatchArm { arm_index: usize },
     #[error("Invalid @init or @fin signature: {0}")]
     InitFinInvalidSignature(String),
+    #[error("Native function `{name}` expects {expected} type arguments, found {found}")]
+    NativeGenericSignature {
+        name: String,
+        expected: usize,
+        found: usize,
+    },
     // Internal errors (codes 230-259)
     #[error("Internal error: missing function {0}")]
     InternalMissingFunction(String),
@@ -292,6 +298,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::NonExhaustiveMatch { .. } => "M070",
             Self::UnreachableMatchArm { .. } => "M071",
             Self::InitFinInvalidSignature(_) => "M072",
+            Self::NativeGenericSignature { .. } => "M073",
             // Internal errors (codes M0100-M149)
             Self::InternalMissingFunction(_) => "M100",
             Self::InternalMissingImpl(_) => "M101",
@@ -393,6 +400,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             )),
             Self::InitFinInvalidSignature(_) => Some(String::from(
                 "@init or @fin functions take no arguments and must return null, never, int, uint, byte, result, or option",
+            )),
+            Self::NativeGenericSignature { expected, .. } => Some(format!(
+                "provide exactly {expected} type arguments, e.g. `name:<T1, T2>(...)`"
             )),
             Self::EnumVariant(variant) => Some(format!("enum variant `{variant}` does not exist")),
             Self::InvalidType { expected, found } => {

@@ -71,5 +71,20 @@ impl VM {
                 let _ = self.variables.insert(name.clone(), value.clone());
             }
         }
+
+        for (alias, base) in &self.registry.native_aliases {
+            let Some(Key::VariableKey(var)) = self.registry.natives.get(alias) else {
+                continue;
+            };
+
+            let value = RuntimeValue::constants()
+                .get(base.as_str())
+                .or_else(|| RuntimeValue::natives().get(base.as_str()))
+                .cloned();
+
+            if let Some(value) = value {
+                let _ = self.variables.insert(var.clone(), value);
+            }
+        }
     }
 }

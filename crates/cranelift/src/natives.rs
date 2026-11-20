@@ -1498,10 +1498,12 @@ pub(crate) fn build_native_mapping(registry: &LirRegistry) -> Natives {
     let mut map = FxHashMap::default();
 
     for (name, key) in &registry.natives {
-        if let Key::VariableKey(var_key) = key
-            && let Some(name) = natives().get(name.as_str())
-        {
-            map.insert(var_key.clone(), *name);
+        if let Key::VariableKey(var_key) = key {
+            let base = registry.native_aliases.get(name).unwrap_or(name);
+
+            if let Some(runtime_name) = natives().get(base.as_str()) {
+                map.insert(var_key.clone(), *runtime_name);
+            }
         }
     }
 

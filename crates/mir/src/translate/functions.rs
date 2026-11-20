@@ -1246,6 +1246,13 @@ fn prepare_call(
         _ => None,
     };
 
+    if let Some(key) =
+        env.monomorphize_native_call(call, scope, span, caller_name.clone(), data_type)?
+    {
+        *call.caller = AstNode::identifier(call.caller.span, *key.name());
+        return Ok(());
+    }
+
     if let Some((generic_params, header, _)) =
         env.monomorphizer.function_template(&caller_name).cloned()
     {
@@ -1470,6 +1477,17 @@ impl MirLowering for AstCall {
                     return Some(MirDataType::UInt);
                 }
                 _ => {}
+            }
+
+            if let Ok(Key::VariableKey(caller_name)) =
+                env.resolve(scope, &caller.value, ResolutionOptions::idents())
+                && let Some(key) = env
+                    .monomorphize_native_call(self, scope, span, caller_name, None)
+                    .ok()?
+                && let Some(var) = env.symbols.variables.get(&key)
+                && let MirDataType::NativeFunction { return_type, .. } = &var.data_type
+            {
+                return Some(*return_type.clone());
             }
 
             if let Ok(caller_ty) = env.resolve_to_data_type(scope, &caller.value) {

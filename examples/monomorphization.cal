@@ -1,0 +1,22 @@
+const takes_str_int := fn (x : str!int) -> int => {
+	if let .Ok : let v <- x => return v;
+	return -1;
+};
+
+const main := fn => {
+	let a = ok(5);
+	let v : int = try a => 0;
+	print("a: " & v);
+
+	let b : str!int = ok(9);
+	print("b: " & takes_str_int(b));
+
+	let c := ok:<str, int>(7);
+	print("c: " & takes_str_int(c));
+
+	let d := err:<str, int>("boom");
+	print("d: " & d);
+
+	let e := some:<int>(42);
+	if let .Some : let v <- e => print("e: " & v);
+};

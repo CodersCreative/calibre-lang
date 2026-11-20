@@ -33,6 +33,7 @@ pub struct Symbols {
     pub constants: FxHashMap<VariableKey, AstNode>,
 
     pub native_mappings: UstrMap<Key>,
+    pub native_aliases: UstrMap<Ustr>,
     pub overloads: Vec<MiddleOverload>,
 
     pub name_to_param_defaults: FxHashMap<VariableKey, usize>,
@@ -40,6 +41,15 @@ pub struct Symbols {
 
     pub function_specializations: UstrMap<Ustr>,
     pub function_defers: Vec<AstNode>,
+}
+
+impl Symbols {
+    pub fn native_name_for(&self, key: &VariableKey) -> Option<Ustr> {
+        self.native_mappings
+            .iter()
+            .find(|(_, value)| matches!(value, Key::VariableKey(v) if v == key))
+            .map(|(name, _)| *name)
+    }
 }
 
 impl MiddleEnvironment {

@@ -4,23 +4,29 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::{MiddleOverload, TypeKey, VariableKey, resolve::ResolutionOptions},
+    symbols::{
+        MiddleOverload, TypeKey, VariableKey,
+        resolve::{Key, ResolutionOptions},
+    },
     translate::MirLowering,
 };
-use calibre_parser::ast::{
-    Substitutable,
-    idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{
-        AstNode, AstNodeType, VarType,
-        declaration::AstDeclaration,
-        functions::{AstFunction, FunctionHeader},
-        types::{AstType, TypeDefType},
+use calibre_parser::{
+    Span,
+    ast::{
+        RefMutability, Substitutable,
+        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::{
+            AstNode, AstNodeType, VarType,
+            declaration::AstDeclaration,
+            functions::{AstCall, AstFunction, FunctionHeader},
+            types::{AstType, TypeDefType},
+        },
+        types::ParserDataType,
     },
-    types::ParserDataType,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use ustr::{Ustr, UstrSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -311,6 +317,33 @@ impl MiddleEnvironment {
                     self.unify_types(_scope, err, concrete_err, generic_params, subst)?;
                 }
             }
+            MirDataType::Ref(inner, mutability) => {
+                if let MirDataType::Ref(concrete_inner, concrete_mut) = concrete
+                    && mutability == concrete_mut
+                {
+                    self.unify_types(_scope, inner, concrete_inner, generic_params, subst)?;
+                }
+            }
+            MirDataType::Ptr(inner) => {
+                if let MirDataType::Ptr(concrete_inner) = concrete {
+                    self.unify_types(_scope, inner, concrete_inner, generic_params, subst)?;
+                }
+            }
+            MirDataType::NativeFunction {
+                return_type,
+                parameters,
+            } => {
+                if let MirDataType::NativeFunction {
+                    return_type: concrete_ret,
+                    parameters: concrete_params,
+                } = concrete
+                {
+                    self.unify_types(_scope, return_type, concrete_ret, generic_params, subst)?;
+                    for (p1, p2) in parameters.iter().zip(concrete_params.iter()) {
+                        self.unify_types(_scope, p1, p2, generic_params, subst)?;
+                    }
+                }
+            }
             _ => {
                 if pattern != concrete {
                     // TODO Handle types not matching
@@ -319,6 +352,163 @@ impl MiddleEnvironment {
         }
 
         Ok(())
+    }
+
+    pub fn monomorphize_native_call(
+        &mut self,
+        call: &AstCall,
+        scope: ScopeId,
+        span: Span,
+        caller_name: VariableKey,
+        expected_return: Option<&MirDataType>,
+    ) -> Result<Option<VariableKey>, MiddleErr> {
+        let Some(native_name) = self.symbols.native_name_for(&caller_name) else {
+            return Ok(None);
+        };
+
+        let Ok(function) = GenericNativeSpec::from_str(native_name.as_str()) else {
+            return Ok(None);
+        };
+
+        let explicit_types: Vec<&ParserDataType> = match &call.caller.node_type {
+            AstNodeType::Identifier(ident) => match &ident.value {
+                PotentialGenericTypeIdentifier::Generic { generic_types, .. } => {
+                    generic_types.iter().collect()
+                }
+                _ => call.generic_types.iter().collect(),
+            },
+            _ => call.generic_types.iter().collect(),
+        };
+
+        let concrete_args = if !explicit_types.is_empty() {
+            let types = explicit_types
+                .iter()
+                .map(|ty| self.resolve_data_type(scope, *ty, ResolutionOptions::typing()))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if types.len() != function.generics.len() {
+                return Err(MiddleErr::NativeGenericSignature {
+                    name: native_name.to_string(),
+                    expected: function.generics.len(),
+                    found: types.len(),
+                });
+            }
+
+            types
+        } else {
+            let types = call
+                .args
+                .iter()
+                .map(|arg| {
+                    arg.get_node()
+                        .type_of(self, scope, span)
+                        .unwrap_or(MirDataType::Dynamic)
+                })
+                .collect::<Vec<_>>();
+
+            self.infer_concrete_type_args(
+                scope,
+                &function.generics,
+                &function.parameters,
+                &function.return_type,
+                &types,
+                expected_return,
+            )?
+            .into_iter()
+            .enumerate()
+            .map(|(i, ty)| {
+                if matches!(&ty, MirDataType::Struct { identifier, generic_types }
+                    if generic_types.is_empty()
+                        && identifier.fully_qualified_path.name == Some(function.generics[i]))
+                {
+                    MirDataType::Dynamic
+                } else {
+                    ty
+                }
+            })
+            .collect::<Vec<_>>()
+        };
+
+        if concrete_args
+            .iter()
+            .all(|ty| matches!(ty, MirDataType::Dynamic))
+            || concrete_args
+                .iter()
+                .any(|ty| self.scoping.has_generic_param(ty))
+        {
+            return Ok(None);
+        }
+
+        self.monomorphize_native(
+            scope,
+            caller_name,
+            native_name.as_str(),
+            &function,
+            concrete_args,
+        )
+        .map(Some)
+    }
+
+    pub fn monomorphize_native(
+        &mut self,
+        scope: ScopeId,
+        original_key: VariableKey,
+        native_name: &str,
+        spec: &GenericNativeSpec,
+        concrete_args: Vec<MirDataType>,
+    ) -> Result<VariableKey, MiddleErr> {
+        let cache_key: (VariableKey, Vec<MirDataType>) =
+            (original_key.clone(), concrete_args.clone());
+
+        if let Some(cached) = self.monomorphizer.functions.get(&cache_key) {
+            return Ok(cached.clone());
+        }
+
+        let subst: FxHashMap<String, MirDataType> = spec
+            .generics
+            .iter()
+            .zip(concrete_args.iter())
+            .map(|(param, concrete)| (param.to_string(), concrete.clone()))
+            .collect();
+
+        let parameters = spec
+            .parameters
+            .iter()
+            .map(|p| p.substitute(&subst))
+            .collect::<Vec<_>>();
+
+        let return_type = spec.return_type.substitute(&subst);
+
+        let base_name = original_key.name();
+        let name = Ustr::from(&mangle_name(base_name.as_str(), &concrete_args));
+
+        let original_scope = self
+            .symbols
+            .variables
+            .get(&original_key)
+            .map(|x| x.scope)
+            .unwrap_or(scope);
+
+        let data_type = MirDataType::NativeFunction {
+            return_type: Box::new(return_type),
+            parameters,
+        };
+
+        let key = self.register_variable(original_scope, name, data_type, VarType::Constant)?;
+
+        let mangled = Ustr::from(key.name().as_str());
+
+        self.symbols
+            .native_mappings
+            .insert(mangled, Key::VariableKey(key.clone()));
+
+        self.symbols
+            .native_aliases
+            .insert(mangled, Ustr::from(native_name));
+
+        self.monomorphizer.functions.insert(cache_key, key.clone());
+
+        Ok(key)
     }
 
     pub fn monomorphize_function(
@@ -628,5 +818,208 @@ impl MiddleEnvironment {
         self.monomorphize_type_impls(scope, original_type, concrete_args)?;
 
         Ok(type_key)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenericNativeSpec {
+    pub generics: Vec<Ustr>,
+    pub parameters: Vec<MirDataType>,
+    pub return_type: MirDataType,
+}
+
+impl FromStr for GenericNativeSpec {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        fn generic(name: &str) -> MirDataType {
+            MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: FullyQualifiedPath::combine(None, Ustr::from(name)),
+                },
+                generic_types: Vec::new(),
+            }
+        }
+
+        fn function(
+            generics: &[&str],
+            parameters: Vec<MirDataType>,
+            return_type: MirDataType,
+        ) -> Result<GenericNativeSpec, ()> {
+            Ok(GenericNativeSpec {
+                generics: generics.iter().map(|x| Ustr::from(x)).collect(),
+                parameters,
+                return_type,
+            })
+        }
+
+        match s {
+            "ok" => function(
+                &["E", "O"],
+                vec![generic("O")],
+                MirDataType::result(generic("O"), generic("E")),
+            ),
+            "err" => function(
+                &["E", "O"],
+                vec![generic("E")],
+                MirDataType::result(generic("O"), generic("E")),
+            ),
+            "some" => function(
+                &["T"],
+                vec![generic("T")],
+                MirDataType::option(generic("T")),
+            ),
+
+            "list.sort_by" => function(
+                &["T"],
+                vec![MirDataType::list(generic("T"))],
+                MirDataType::list(generic("T")),
+            ),
+            "list.raw_remove" => function(
+                &["T"],
+                vec![
+                    MirDataType::reference(MirDataType::list(generic("T")), RefMutability::MutRef),
+                    MirDataType::UInt,
+                ],
+                MirDataType::option(generic("T")),
+            ),
+            "list.raw_insert" => function(
+                &["T"],
+                vec![
+                    MirDataType::reference(MirDataType::list(generic("T")), RefMutability::MutRef),
+                    MirDataType::Int,
+                    generic("T"),
+                ],
+                MirDataType::Bool,
+            ),
+            "list.binary_search_by" => function(
+                &["T"],
+                vec![MirDataType::reference(
+                    MirDataType::list(generic("T")),
+                    RefMutability::Ref,
+                )],
+                MirDataType::option(MirDataType::Int),
+            ),
+
+            "async.mutex_new" => function(&["T"], vec![generic("T")], MirDataType::Host),
+            "async.mutex_set" => function(
+                &["T"],
+                vec![MirDataType::Host, generic("T")],
+                MirDataType::Null,
+            ),
+            "async.mutex_with" => function(
+                &["T", "U"],
+                vec![
+                    MirDataType::Host,
+                    MirDataType::Function {
+                        return_type: Box::new(generic("U")),
+                        parameters: vec![generic("T")],
+                    },
+                ],
+                generic("U"),
+            ),
+            "async.channel_send" => function(
+                &["T"],
+                vec![MirDataType::Host, generic("T")],
+                MirDataType::Bool,
+            ),
+            "async.channel_get" => function(
+                &["T"],
+                vec![MirDataType::Host, MirDataType::UInt],
+                MirDataType::option(generic("T")),
+            ),
+
+            "collections.hashmap_new" => function(
+                &["T"],
+                vec![MirDataType::list(generic("T"))],
+                MirDataType::Host,
+            ),
+            "collections.hashmap_set" => function(
+                &["K", "V"],
+                vec![MirDataType::Host, generic("K"), generic("V")],
+                MirDataType::Null,
+            ),
+            "collections.hashmap_get" => function(
+                &["K", "V"],
+                vec![MirDataType::Host, generic("K")],
+                MirDataType::option(generic("V")),
+            ),
+            "collections.hashmap_remove" => function(
+                &["K", "V"],
+                vec![MirDataType::Host, generic("K")],
+                MirDataType::option(generic("V")),
+            ),
+            "collections.hashmap_contains" => function(
+                &["K"],
+                vec![MirDataType::Host, generic("K")],
+                MirDataType::Bool,
+            ),
+            "collections.hashmap_keys" => function(
+                &["K"],
+                vec![MirDataType::Host],
+                MirDataType::list(generic("K")),
+            ),
+            "collections.hashmap_values" => function(
+                &["V"],
+                vec![MirDataType::Host],
+                MirDataType::list(generic("V")),
+            ),
+            "collections.hashmap_entries" => function(
+                &["K", "V"],
+                vec![MirDataType::Host],
+                MirDataType::list(MirDataType::Tuple(vec![generic("K"), generic("V")])),
+            ),
+            "collections.hashset_new" => function(
+                &["T"],
+                vec![MirDataType::list(generic("T"))],
+                MirDataType::Host,
+            ),
+            "collections.hashset_add" => function(
+                &["T"],
+                vec![MirDataType::Host, generic("T")],
+                MirDataType::Bool,
+            ),
+            "collections.hashset_remove" => function(
+                &["T"],
+                vec![MirDataType::Host, generic("T")],
+                MirDataType::Bool,
+            ),
+            "collections.hashset_contains" => function(
+                &["T"],
+                vec![MirDataType::Host, generic("T")],
+                MirDataType::Bool,
+            ),
+            "collections.hashset_values" => function(
+                &["T"],
+                vec![MirDataType::Host],
+                MirDataType::list(generic("T")),
+            ),
+
+            "process.raw_exec" => function(
+                &["T"],
+                vec![MirDataType::Dynamic.clone()],
+                MirDataType::result(generic("T"), MirDataType::Str),
+            ),
+            "net.tcp_connect" => function(
+                &["T"],
+                vec![MirDataType::Str, MirDataType::Int],
+                generic("T"),
+            ),
+            "net.tcp_listen" => function(
+                &["T"],
+                vec![MirDataType::Str, MirDataType::Int],
+                generic("T"),
+            ),
+            "net.tcp_accept" => function(&["T"], vec![MirDataType::Host], generic("T")),
+            "fs.path_file_type" => function(&["T"], vec![MirDataType::Host], generic("T")),
+            "fs.metadata_file_type" => function(&["T"], vec![MirDataType::Host], generic("T")),
+            "fs.direntry_file_type" => function(
+                &["T"],
+                vec![MirDataType::Host],
+                MirDataType::result(generic("T"), MirDataType::Str),
+            ),
+
+            _ => Err(()),
+        }
     }
 }

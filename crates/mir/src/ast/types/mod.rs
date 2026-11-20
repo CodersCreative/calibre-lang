@@ -87,6 +87,13 @@ impl MirDataType {
                 parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
             },
             MirDataType::Ref(x, m) => MirDataType::Ref(Box::new(x.substitute(subst)), *m),
+            MirDataType::NativeFunction {
+                return_type,
+                parameters,
+            } => MirDataType::NativeFunction {
+                return_type: Box::new(return_type.substitute(subst)),
+                parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
+            },
             _ => self.clone(),
         }
     }
@@ -422,6 +429,25 @@ impl MirDataType {
         }
     }
 
+    pub fn option(inner: Self) -> Self {
+        MirDataType::Option(Box::new(inner))
+    }
+
+    pub fn list(inner: Self) -> Self {
+        MirDataType::List(Box::new(inner))
+    }
+
+    pub fn result(ok: Self, err: Self) -> Self {
+        MirDataType::Result {
+            ok: Box::new(ok),
+            err: Box::new(err),
+        }
+    }
+
+    pub fn reference(inner: Self, mutability: RefMutability) -> Self {
+        MirDataType::Ref(Box::new(inner), mutability)
+    }
+
     pub fn function(parameters: Vec<MirDataType>, return_type: MirDataType) -> MirDataType {
         MirDataType::Function {
             return_type: Box::new(return_type),
@@ -436,6 +462,129 @@ impl MirDataType {
                 return_type,
             } => (parameters.clone(), (**return_type).clone()),
             _ => (Vec::new(), MirDataType::Null),
+        }
+    }
+
+    pub fn replace_dyn_from(&self, ty: &MirDataType) -> MirDataType {
+        match ty {
+            MirDataType::Dynamic => self.clone(),
+            MirDataType::Option(inner) => {
+                if let MirDataType::Option(x) = self {
+                    MirDataType::Option(Box::new(x.replace_dyn_from(inner)))
+                } else {
+                    ty.clone()
+                }
+            }
+            MirDataType::Result { ok, err } => {
+                if let MirDataType::Result {
+                    ok: expected_ok,
+                    err: expected_err,
+                } = self
+                {
+                    MirDataType::Result {
+                        ok: Box::new(expected_ok.replace_dyn_from(ok)),
+                        err: Box::new(expected_err.replace_dyn_from(err)),
+                    }
+                } else {
+                    ty.clone()
+                }
+            }
+            MirDataType::List(inner) => {
+                if let MirDataType::List(x) = self {
+                    MirDataType::List(Box::new(x.replace_dyn_from(inner)))
+                } else {
+                    ty.clone()
+                }
+            }
+            MirDataType::Tuple(items) => {
+                if let MirDataType::Tuple(expected_items) = self
+                    && items.len() == expected_items.len()
+                {
+                    MirDataType::Tuple(
+                        items
+                            .iter()
+                            .zip(expected_items.iter())
+                            .map(|(a, b)| b.replace_dyn_from(a))
+                            .collect(),
+                    )
+                } else {
+                    ty.clone()
+                }
+            }
+            MirDataType::Ref(_, _) => ty.clone(),
+            MirDataType::Ptr(inner) => {
+                if let MirDataType::Ptr(exp_inner) = self {
+                    MirDataType::Ptr(Box::new(exp_inner.replace_dyn_from(inner)))
+                } else {
+                    ty.clone()
+                }
+            }
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } => {
+                if let MirDataType::Struct {
+                    identifier: expected_id,
+                    generic_types: generics,
+                } = self
+                    && identifier == expected_id
+                    && generic_types.len() == generics.len()
+                {
+                    MirDataType::Struct {
+                        identifier: identifier.clone(),
+                        generic_types: generic_types
+                            .iter()
+                            .zip(generics.iter())
+                            .map(|(a, b)| b.replace_dyn_from(a))
+                            .collect(),
+                    }
+                } else {
+                    ty.clone()
+                }
+            }
+            MirDataType::Function {
+                return_type,
+                parameters,
+            }
+            | MirDataType::NativeFunction {
+                return_type,
+                parameters,
+            } => {
+                if let MirDataType::Function {
+                    return_type: expected_return,
+                    parameters: expected_params,
+                }
+                | MirDataType::NativeFunction {
+                    return_type: expected_return,
+                    parameters: expected_params,
+                } = self
+                    && parameters.len() == expected_params.len()
+                {
+                    let is_native = matches!(ty, MirDataType::NativeFunction { .. });
+                    let return_type = expected_return.replace_dyn_from(return_type);
+
+                    let params = parameters
+                        .iter()
+                        .zip(expected_params.iter())
+                        .map(|(a, b)| b.replace_dyn_from(a))
+                        .collect();
+
+                    if is_native {
+                        MirDataType::NativeFunction {
+                            return_type: Box::new(return_type),
+                            parameters: params,
+                        }
+                    } else {
+                        MirDataType::Function {
+                            return_type: Box::new(return_type),
+                            parameters: params,
+                        }
+                    }
+                } else {
+                    ty.clone()
+                }
+            }
+            _ => ty.clone(),
         }
     }
 

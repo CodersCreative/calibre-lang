@@ -140,6 +140,8 @@ pub struct LirCall {
     pub caller: Box<LirNodeType>,
     pub args: Box<[LirNodeType]>,
     pub returns_value: bool,
+    #[serde(default)]
+    pub return_type: Option<MirDataType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]

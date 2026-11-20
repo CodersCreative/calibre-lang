@@ -403,10 +403,10 @@ impl CraneliftTranslation for LirDeref {
             let call = translator.builder.ins().call(func_ref, &[ptr.value]);
             let result = translator.builder.inst_results(call)[0];
 
-            Ok(CompiledValue::new(
-                result,
-                ptr.data_type.unwrap_all_refs().clone(),
-            ))
+            let data_type = ptr.data_type.unwrap_all_refs().clone();
+            let result = translator.convert_from_i64(result, &data_type);
+
+            Ok(CompiledValue::new(result, data_type))
         } else {
             Ok(ptr)
         }

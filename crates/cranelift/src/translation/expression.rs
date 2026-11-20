@@ -388,6 +388,7 @@ impl CraneliftTranslation for LirAs {
                 caller: Box::new(LirNodeType::load(VariableKey::from("calibre_to_string"))),
                 args: Box::new([*self.value]),
                 returns_value: true,
+                return_type: Some(MirDataType::Str),
             }
             .translate(translator, Some(MirDataType::Str));
         }

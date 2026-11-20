@@ -72,6 +72,8 @@ pub struct ManifestSymbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
     pub constants: FxHashMap<VariableKey, AstNode>,
     pub native_mappings: UstrMap<Key>,
+    #[serde(default)]
+    pub native_aliases: UstrMap<Ustr>,
     pub overloads: Vec<MiddleOverload>,
     pub fn_specializations: UstrMap<Ustr>,
 }
@@ -82,6 +84,7 @@ impl From<&Symbols> for ManifestSymbols {
             variables: value.variables.clone(),
             constants: value.constants.clone(),
             native_mappings: value.native_mappings.clone(),
+            native_aliases: value.native_aliases.clone(),
             overloads: value.overloads.clone(),
             fn_specializations: value.function_specializations.clone(),
         }

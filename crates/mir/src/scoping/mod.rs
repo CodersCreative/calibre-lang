@@ -80,6 +80,46 @@ impl Scoping {
         false
     }
 
+    pub fn has_generic_param(&self, ty: &MirDataType) -> bool {
+        let params: UstrSet = self.generic_param_stack.iter().flatten().cloned().collect();
+
+        fn inner(params: &UstrSet, ty: &MirDataType) -> bool {
+            match ty {
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                } => {
+                    if generic_types.is_empty()
+                        && identifier
+                            .fully_qualified_path
+                            .name
+                            .is_some_and(|n| params.contains(&n))
+                    {
+                        return true;
+                    }
+                    generic_types.iter().any(|g| inner(params, g))
+                }
+                MirDataType::List(x) | MirDataType::Ptr(x) | MirDataType::Option(x) => {
+                    inner(params, x)
+                }
+                MirDataType::Ref(x, _) => inner(params, x),
+                MirDataType::Tuple(xs) => xs.iter().any(|x| inner(params, x)),
+                MirDataType::Result { ok, err } => inner(params, ok) || inner(params, err),
+                MirDataType::Function {
+                    return_type,
+                    parameters,
+                }
+                | MirDataType::NativeFunction {
+                    return_type,
+                    parameters,
+                } => inner(params, return_type) || parameters.iter().any(|p| inner(params, p)),
+                _ => false,
+            }
+        }
+
+        !params.is_empty() && inner(&params, ty)
+    }
+
     #[inline(always)]
     pub fn get_location(&self, scope: ScopeId, span: Span) -> Option<Location> {
         self.scope_or_err(scope).ok().map(|s| Location {

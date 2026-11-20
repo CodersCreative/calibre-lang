@@ -77,6 +77,7 @@ impl MirRenamable for LirNodeType {
                 caller,
                 args,
                 returns_value: _,
+                return_type: _,
             }) => {
                 caller.rename(state);
                 for arg in args {

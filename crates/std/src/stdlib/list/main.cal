@@ -31,7 +31,7 @@ impl<T> list:<T> {
 
 	@pure
 	const index_of := fn (self : &list:<T>, needle : &T) -> uint? => {
-		for i in len(self) => if self[i]! = needle => return some(i);
+		for i in len(self) => if self[i]! = needle => return some(i as! uint);
 		return none;
 	};
 
@@ -41,7 +41,7 @@ impl<T> list:<T> {
 		
 		for i >= 0 => {
 			let value : &T? = self[i]!;
-			if value = needle => return some(i);
+			if value = needle => return some(i as! uint);
 			if i = 0 => return none;
 			i -= 1;
 		};

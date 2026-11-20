@@ -29,6 +29,8 @@ pub struct VMRegistry {
     pub globals: FxHashMap<VariableKey, VMGlobal>,
     pub natives: UstrMap<Key>,
     #[serde(default)]
+    pub native_aliases: UstrMap<Ustr>,
+    #[serde(default)]
     pub scope_to_file: FxHashMap<NodeId, Ustr>,
 }
 
@@ -66,6 +68,7 @@ impl From<LirRegistry> for VMRegistry {
             functions,
             globals,
             natives: value.natives,
+            native_aliases: value.native_aliases,
             scope_to_file: value.scope_to_file,
         }
     }

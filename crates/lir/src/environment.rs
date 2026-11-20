@@ -37,6 +37,8 @@ pub struct LirRegistry {
     pub globals: FxHashMap<VariableKey, LirGlobal>,
     pub types: FxHashMap<TypeKey, LirType>,
     pub natives: UstrMap<Key>,
+    #[serde(default)]
+    pub native_aliases: UstrMap<Ustr>,
     pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
 
@@ -214,6 +216,7 @@ impl<'a> LirEnvironment<'a> {
                 functions: FxHashMap::default(),
                 globals: FxHashMap::default(),
                 natives: env.symbols.native_mappings.clone(),
+                native_aliases: env.symbols.native_aliases.clone(),
                 scope_to_file,
             },
             blocks: vec![LirBlock {

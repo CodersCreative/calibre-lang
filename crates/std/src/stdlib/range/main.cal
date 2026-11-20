@@ -9,7 +9,7 @@
 
 @pure
 @overload("as") fn (self : range) -> null!list:<uint> =>
-	return ok(list:<int>[i for i in 0..len(self)]);
+	return ok(list:<uint>[i for i in 0..len(self)]);
 
 impl range {
 	@pure

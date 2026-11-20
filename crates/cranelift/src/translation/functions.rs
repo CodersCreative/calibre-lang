@@ -207,7 +207,9 @@ impl CraneliftTranslation for LirCall {
                 translator.builder.ins().iconst(translator.types.int(), 0)
             };
 
-            let mut return_type = if let Some(t) = &sig.typed_return {
+            let mut return_type = if let Some(t) = &self.return_type {
+                t.clone()
+            } else if let Some(t) = &sig.typed_return {
                 t.clone()
             } else if let Some(t) = &sig.returns {
                 match t {
@@ -223,10 +225,8 @@ impl CraneliftTranslation for LirCall {
                 MirDataType::Null
             };
 
-            if let Some(t) = data_type
-                && return_type.is_dyn()
-            {
-                return_type = t;
+            if let Some(t) = data_type {
+                return_type = t.replace_dyn_from(&return_type);
             }
 
             let subst = arg_types

@@ -527,7 +527,10 @@ impl ParserDataType {
                 (
                     "async.mutex_get",
                     vec![ParserInnerType::Host],
-                    ParserInnerType::Dynamic,
+                    ParserInnerType::Ref(
+                        Box::new(Self::native_type(ParserInnerType::Dynamic)),
+                        RefMutability::MutRef,
+                    ),
                 ),
                 (
                     "async.mutex_set",

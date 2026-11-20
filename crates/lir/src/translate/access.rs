@@ -85,6 +85,7 @@ impl LirLowering for MirCall {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let mut returns_value = true;
+        let mut return_type = None;
 
         let l_caller = env.lower_node(*self.caller);
         let l_args = env.lower_nodes(self.args);
@@ -92,17 +93,29 @@ impl LirLowering for MirCall {
         if let LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value }) =
             &l_caller
             && let Some(var) = env.env.symbols.variables.get(value)
-            && let MirDataType::Function { return_type, .. }
-            | MirDataType::NativeFunction { return_type, .. } = &var.data_type
-            && return_type.is_null()
         {
-            returns_value = false;
+            match &var.data_type {
+                MirDataType::Function {
+                    return_type: ty, ..
+                }
+                | MirDataType::NativeFunction {
+                    return_type: ty, ..
+                } => {
+                    if ty.is_null() {
+                        returns_value = false;
+                    } else {
+                        return_type = Some((**ty).clone());
+                    }
+                }
+                _ => {}
+            }
         }
 
         LirNodeType::Call(LirCall {
             caller: Box::new(l_caller),
             args: l_args,
             returns_value,
+            return_type,
         })
     }
 }
