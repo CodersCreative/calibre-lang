@@ -26,6 +26,12 @@ pub mod natives;
 pub mod translation;
 pub mod values;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CraneliftConfig {
+    pub max_per_thread: Option<u64>,
+    pub stack_size: Option<u64>,
+}
+
 pub type Globals = FxHashMap<VariableKey, (MirDataType, DataId)>;
 pub type Functions = FxHashMap<VariableKey, FuncId>;
 pub type RuntimeFunctions = FxHashMap<&'static str, FuncId>;
@@ -43,6 +49,7 @@ pub struct CompilerData {
     counter: i64,
     isa: Arc<dyn isa::TargetIsa>,
     source_dir: Option<String>,
+    config: CraneliftConfig,
 }
 
 fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
@@ -514,6 +521,14 @@ impl CompilerData {
                 translator.runtime_lifecycle_call(&func_key, 1)?;
             }
 
+            let max_per_thread =
+                translator.int_const(self.config.max_per_thread.unwrap_or(16) as i64);
+
+            let stack_size = translator.int_const(self.config.stack_size.unwrap_or(0) as i64);
+
+            translator
+                .runtime_call_void("calibre_scheduler_configure", &[max_per_thread, stack_size])?;
+
             translator.runtime_call_void("calibre_scheduler_drain", &[])?;
             translator.runtime_call_void("calibre_exit_flush", &[])?;
 
@@ -829,6 +844,7 @@ impl JitCompiler {
         fin_functions: Vec<(i32, VariableKey)>,
         args: Vec<String>,
         source_dir: Option<String>,
+        config: CraneliftConfig,
     ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
         let mut builder =
@@ -857,6 +873,7 @@ impl JitCompiler {
             counter: 1,
             isa,
             source_dir,
+            config,
         };
 
         if let Ok(mut x) = calibre_runtime::native::env::PROGRAM_ARGS.lock() {
@@ -889,6 +906,7 @@ impl AotCompiler {
         init_functions: Vec<(i32, VariableKey)>,
         fin_functions: Vec<(i32, VariableKey)>,
         source_dir: Option<String>,
+        config: CraneliftConfig,
     ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
 
@@ -917,6 +935,7 @@ impl AotCompiler {
             counter: 1,
             isa,
             source_dir,
+            config,
         };
 
         data.compile(&mut module, init_functions, fin_functions)?;

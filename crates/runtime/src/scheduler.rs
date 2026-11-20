@@ -6,6 +6,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
+static CONFIG_MAX_PER_THREAD: AtomicUsize = AtomicUsize::new(0);
+static CONFIG_STACK_SIZE: AtomicUsize = AtomicUsize::new(0);
+
+fn stack_size() -> usize {
+    let configured = CONFIG_STACK_SIZE.load(Ordering::Acquire);
+
+    if configured != 0 {
+        return configured;
+    }
+
+    1024 * 1024
+}
+
 pub enum BlockResult {
     Woken,
     TimedOut,
@@ -53,7 +66,9 @@ fn run_task(task: TaskArgs) {
 
 #[cfg(not(target_arch = "wasm32"))]
 mod imp {
-    use super::{BlockResult, TaskArgs, note_task_finished, note_task_spawned, run_task};
+    use super::{
+        BlockResult, TaskArgs, note_task_finished, note_task_spawned, run_task, stack_size,
+    };
     use may::coroutine::{self, Coroutine};
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -93,7 +108,7 @@ mod imp {
         let spawned = unsafe {
             coroutine::Builder::new()
                 .name("calibre-task".to_string())
-                .stack_size(1024 * 1024)
+                .stack_size(stack_size())
                 .spawn(move || run_task(task))
         };
 
@@ -102,6 +117,12 @@ mod imp {
         } else {
             note_task_finished();
             false
+        }
+    }
+
+    pub fn configure(max_per_thread: u64) {
+        if max_per_thread > 0 {
+            may::config().set_workers(max_per_thread as usize);
         }
     }
 
@@ -210,6 +231,7 @@ mod imp {
 
     pub fn wake_all(_key: usize) {}
     pub fn wake_one(_key: usize) {}
+    pub fn configure(_max_per_thread: i64) {}
 }
 
 fn spawn(closure: *mut GcAggregate, waitgroup: *mut GcHost) -> bool {
@@ -250,6 +272,19 @@ pub fn wake_all(key: usize) {
 #[inline(always)]
 pub fn wake_one(key: usize) {
     imp::wake_one(key)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_scheduler_configure(max_per_thread: u64, stack_size_bytes: u64) {
+    if max_per_thread > 0 {
+        CONFIG_MAX_PER_THREAD.store(max_per_thread as usize, Ordering::Release);
+    }
+
+    if stack_size_bytes > 0 {
+        CONFIG_STACK_SIZE.store(stack_size_bytes as usize, Ordering::Release);
+    }
+
+    imp::configure(max_per_thread);
 }
 
 #[unsafe(no_mangle)]

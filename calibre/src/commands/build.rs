@@ -169,6 +169,10 @@ impl BuildSource {
                 self.path
                     .parent()
                     .map(|dir| dir.to_string_lossy().to_string()),
+                calibre_cranelift::CraneliftConfig {
+                    max_per_thread: self.vm_config.async_max_per_thread,
+                    stack_size: self.vm_config.thread_stack_size,
+                },
             )?;
 
             let obj = aot.finish()?;

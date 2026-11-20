@@ -592,6 +592,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         },
         // scheduler
         RuntimeSymbol {
+            name: "calibre_scheduler_configure",
+            ptr: scheduler::calibre_scheduler_configure as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_spawn_task",
             ptr: scheduler::calibre_spawn_task as *const u8,
         },

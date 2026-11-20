@@ -223,7 +223,7 @@ impl RunSource {
         let mut vm: VM = VM::new(
             VMRegistry::from(artifacts.lir.data.clone()),
             artifacts.mappings,
-            vm_config,
+            vm_config.clone(),
         );
 
         vm.set_source_file_override(&self.path);
@@ -253,6 +253,11 @@ impl RunSource {
 
                 let jit_begin = start.elapsed();
 
+                let config = calibre_cranelift::CraneliftConfig {
+                    max_per_thread: vm_config.async_max_per_thread,
+                    stack_size: vm_config.thread_stack_size,
+                };
+
                 let jit = JitCompiler::new(
                     artifacts.lir.data,
                     artifacts.init_functions,
@@ -261,6 +266,7 @@ impl RunSource {
                     self.path
                         .parent()
                         .map(|dir| dir.to_string_lossy().to_string()),
+                    config,
                 )?;
 
                 if self.time {
@@ -306,6 +312,10 @@ impl RunSource {
                     self.path
                         .parent()
                         .map(|dir| dir.to_string_lossy().to_string()),
+                    calibre_cranelift::CraneliftConfig {
+                        max_per_thread: vm_config.async_max_per_thread,
+                        stack_size: vm_config.thread_stack_size,
+                    },
                 )?;
 
                 let obj = aot.finish()?;

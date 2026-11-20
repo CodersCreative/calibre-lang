@@ -1375,6 +1375,17 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             ),
             // scheduler
             (
+                "calibre_scheduler_configure",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
                 "calibre_spawn_task",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],

@@ -21,8 +21,9 @@ pub struct SchedulerHandle {
 
 #[derive(Debug)]
 struct SchedulerInner {
-    max_per_thread: usize,
+    max_per_thread: u64,
     quantum: usize,
+    thread_stack_size: Option<u64>,
     workers: Mutex<Vec<Arc<Worker>>>,
     handles: Mutex<Vec<thread::JoinHandle<()>>>,
     shutdown: AtomicBool,
@@ -46,12 +47,13 @@ struct Task {
 
 impl SchedulerHandle {
     pub fn new(config: &VMConfig) -> Self {
-        let max_per_thread = config.async_max_per_thread.unwrap_or(10);
+        let max_per_thread = config.async_max_per_thread.unwrap_or(16);
         let quantum = config.async_quantum.unwrap_or(1024);
 
         let inner = Arc::new(SchedulerInner {
             max_per_thread,
             quantum,
+            thread_stack_size: config.thread_stack_size,
             workers: Mutex::new(Vec::new()),
             handles: Mutex::new(Vec::new()),
             shutdown: AtomicBool::new(false),
@@ -72,9 +74,10 @@ impl SchedulerHandle {
                     quantum,
                     tasks: AtomicUsize::new(0),
                 });
-                let handle = Self::start_worker(worker.clone(), inner.clone());
-                workers.push(worker);
-                handles.push(handle);
+                if let Some(handle) = Self::start_worker(worker.clone(), inner.clone()) {
+                    workers.push(worker);
+                    handles.push(handle);
+                }
             }
         }
 
@@ -96,7 +99,7 @@ impl SchedulerHandle {
 
             for candidate in workers.iter() {
                 let load = candidate.tasks.load(Ordering::Acquire);
-                if load < self.inner.max_per_thread && load < best_load {
+                if load < (self.inner.max_per_thread as usize) && load < best_load {
                     best_load = load;
                     selected = Some(candidate.clone());
                 }
@@ -110,7 +113,9 @@ impl SchedulerHandle {
                     tasks: AtomicUsize::new(0),
                 });
 
-                let handle = Self::start_worker(worker.clone(), self.inner.clone());
+                let Some(handle) = Self::start_worker(worker.clone(), self.inner.clone()) else {
+                    return;
+                };
                 let Ok(mut handles) = self.inner.handles.lock() else {
                     return;
                 };
@@ -165,55 +170,66 @@ impl SchedulerHandle {
         worker.cvar.notify_one();
     }
 
-    fn start_worker(worker: Arc<Worker>, scheduler: Arc<SchedulerInner>) -> thread::JoinHandle<()> {
-        thread::spawn(move || {
-            loop {
-                let mut task = {
-                    let Ok(mut queue) = worker.queue.lock() else {
-                        return;
-                    };
-
-                    loop {
-                        if let Some(task) = queue.pop_front() {
-                            break task;
-                        }
-
-                        if scheduler.shutdown.load(Ordering::Acquire) {
-                            return;
-                        }
-
-                        queue = if let Ok(x) = worker.cvar.wait(queue) {
-                            x
-                        } else {
+    fn start_worker(
+        worker: Arc<Worker>,
+        scheduler: Arc<SchedulerInner>,
+    ) -> Option<thread::JoinHandle<()>> {
+        thread::Builder::new()
+            .stack_size(
+                scheduler
+                    .thread_stack_size
+                    .map(|x| x as usize)
+                    .unwrap_or(1024 * 1024),
+            )
+            .spawn(move || {
+                loop {
+                    let mut task = {
+                        let Ok(mut queue) = worker.queue.lock() else {
                             return;
                         };
-                    }
-                };
 
-                if let Some(status) = run_task_slice(&mut task, worker.quantum, &scheduler) {
-                    match status {
-                        TaskStatus::Yielded => {
-                            let Ok(mut queue) = worker.queue.lock() else {
-                                continue;
-                            };
-
-                            queue.push_back(task);
-                        }
-                        TaskStatus::Finished => {
-                            worker.tasks.fetch_sub(1, Ordering::AcqRel);
-
-                            if let Some(wg) = task.wait_group.take() {
-                                wg.done();
+                        loop {
+                            if let Some(task) = queue.pop_front() {
+                                break task;
                             }
 
-                            if let Ok(mut pool) = scheduler.vm_pool.lock() {
-                                pool.push_back(task.vm);
+                            if scheduler.shutdown.load(Ordering::Acquire) {
+                                return;
+                            }
+
+                            queue = if let Ok(x) = worker.cvar.wait(queue) {
+                                x
+                            } else {
+                                return;
+                            };
+                        }
+                    };
+
+                    if let Some(status) = run_task_slice(&mut task, worker.quantum, &scheduler) {
+                        match status {
+                            TaskStatus::Yielded => {
+                                let Ok(mut queue) = worker.queue.lock() else {
+                                    continue;
+                                };
+
+                                queue.push_back(task);
+                            }
+                            TaskStatus::Finished => {
+                                worker.tasks.fetch_sub(1, Ordering::AcqRel);
+
+                                if let Some(wg) = task.wait_group.take() {
+                                    wg.done();
+                                }
+
+                                if let Ok(mut pool) = scheduler.vm_pool.lock() {
+                                    pool.push_back(task.vm);
+                                }
                             }
                         }
                     }
                 }
-            }
-        })
+            })
+            .ok()
     }
 
     fn stop_workers(&self) {
