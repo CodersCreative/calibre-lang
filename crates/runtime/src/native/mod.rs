@@ -97,6 +97,8 @@ pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
         | Value::Enum(_)
         | Value::Host(_)
         | Value::Reader(_)
+        | Value::Option(_)
+        | Value::Result(_)
         | Value::Func(_) => 0,
     }
 }

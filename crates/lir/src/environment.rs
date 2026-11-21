@@ -48,7 +48,10 @@ impl LirRegistry {
     }
 
     pub fn enums(&self) -> impl Iterator<Item = &TypeKey> {
-        self.types.iter().map(|x| x.0)
+        self.types.iter().filter_map(|x| match x.1 {
+            LirType::Enum(_) => Some(x.0),
+            _ => None,
+        })
     }
 }
 

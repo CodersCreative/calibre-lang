@@ -134,6 +134,8 @@ pub enum Value {
     Struct(*mut GcAggregate),
     Tuple(*mut GcAggregate),
     Enum(*mut GcAggregate),
+    Result(*mut GcAggregate),
+    Option(*mut GcAggregate),
     List(*mut GcList),
     Range(i64, i64),
     Host(*mut GcHost),
@@ -157,6 +159,8 @@ impl From<&Value> for ValueTag {
             Value::Struct(_) => Self::Struct,
             Value::Tuple(_) => Self::Tuple,
             Value::Enum(_) => Self::Enum,
+            Value::Result(_) => Self::Result,
+            Value::Option(_) => Self::Option,
             Value::List(_) => Self::List,
             Value::Range(_, _) => Self::Range,
             Value::Host(_) => Self::Host,
@@ -182,6 +186,8 @@ impl Value {
             ValueTag::Struct => Self::Struct(value.cast_unsigned() as *mut GcAggregate),
             ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *mut GcAggregate),
             ValueTag::Enum => Self::Enum(value.cast_unsigned() as *mut GcAggregate),
+            ValueTag::Result => Self::Result(value.cast_unsigned() as *mut GcAggregate),
+            ValueTag::Option => Self::Option(value.cast_unsigned() as *mut GcAggregate),
             ValueTag::List => Self::List(value.cast_unsigned() as *mut GcList),
             ValueTag::Range => {
                 let from = value as i32 as i64;
@@ -233,6 +239,8 @@ impl From<Value> for i64 {
             Value::Struct(x) => x as i64,
             Value::Tuple(x) => x as i64,
             Value::Enum(x) => x as i64,
+            Value::Result(x) => x as i64,
+            Value::Option(x) => x as i64,
             Value::List(x) => x as i64,
             Value::Host(x) => x as i64,
             Value::Range(from, to) => {
@@ -317,16 +325,57 @@ impl Display for Value {
                 } else {
                     let value = unsafe { &**ptr };
 
-                    write!(
-                        f,
-                        "{{ {} }}",
-                        value
-                            .data
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Box<[_]>>()
-                            .join(", ")
-                    )
+                    if value.data.len() < 2 {
+                        if value.data.is_empty() {
+                            return write!(f, "null");
+                        }
+
+                        return write!(f, "[{}]", value.data[0]);
+                    }
+
+                    write!(f, "[{}] : {}", value.data[0], value.data[1],)
+                }
+            }
+            Value::Result(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+
+                    if value.data.len() < 2 {
+                        return write!(f, "null");
+                    }
+
+                    if value
+                        .data
+                        .first()
+                        .is_some_and(|x| i64::from(x.clone()) == 0)
+                    {
+                        write!(f, "Ok : {}", value.data[1])
+                    } else {
+                        write!(f, "Err : {}", value.data[1])
+                    }
+                }
+            }
+            Value::Option(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+
+                    if value.data.len() < 2 {
+                        return write!(f, "None");
+                    }
+
+                    if value
+                        .data
+                        .first()
+                        .is_some_and(|x| i64::from(x.clone()) == 0)
+                    {
+                        write!(f, "Some : {}", value.data[1])
+                    } else {
+                        write!(f, "None")
+                    }
                 }
             }
             Value::List(ptr) => {
@@ -380,6 +429,8 @@ pub enum ValueTag {
     Struct,
     Tuple,
     Enum,
+    Result,
+    Option,
     List,
     Range,
     Host,

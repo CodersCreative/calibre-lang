@@ -631,15 +631,17 @@ impl MirDataType {
                     .first()
                     .is_some_and(|x| x == &MirDataType::Str) =>
             {
-                15
+                17
             }
             MirDataType::Tuple(_) => 10,
-            MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 11,
-            MirDataType::List(_) => 12,
-            MirDataType::Range => 13,
-            MirDataType::Host => 14,
-            MirDataType::Function { .. } => 16,
-            _ => 17,
+            MirDataType::Struct { .. } => 11,
+            MirDataType::Result { .. } => 12,
+            MirDataType::Option(_) => 13,
+            MirDataType::List(_) => 14,
+            MirDataType::Range => 15,
+            MirDataType::Host => 16,
+            MirDataType::Function { .. } => 18,
+            _ => 19,
         }
     }
 
