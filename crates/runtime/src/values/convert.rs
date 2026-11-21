@@ -431,7 +431,7 @@ pub extern "C" fn calibre_as(
         unsafe { (*descriptor).data.clone() }
     };
 
-    let target = parse_type(&descriptor).unwrap_or(TargetType::Unsupported);
+    let target = TypeParser::parse(&descriptor).unwrap_or(TargetType::Unsupported);
 
     match value.convert_value(&target) {
         Ok(value) => match failure_mode {
