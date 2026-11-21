@@ -20,9 +20,9 @@ pub mod time;
 
 // TODO Add debug information
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_panic(value: *mut GcString) {
+pub extern "C" fn calibre_panic(value: *mut GcString) -> ! {
     if value.is_null() {
-        return;
+        std::process::exit(1);
     }
 
     let value = unsafe { (*value).data.to_string() };
@@ -33,7 +33,7 @@ pub extern "C" fn calibre_panic(value: *mut GcString) {
         eprintln!("calibre panicked with message: {}", value);
     }
 
-    std::process::exit(1);
+    std::process::exit(1)
 }
 
 #[unsafe(no_mangle)]

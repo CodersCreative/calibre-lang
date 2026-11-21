@@ -17,6 +17,7 @@ pub mod aggregate;
 pub mod big;
 pub mod clone;
 pub mod closure;
+pub mod convert;
 pub mod enums;
 #[cfg(feature = "ffi")]
 pub mod ffi;
@@ -205,6 +206,14 @@ impl Value {
         let tag = ValueTag::from(&self);
         let payload = i64::from(self);
         (tag, payload)
+    }
+
+    pub fn string(data: String) -> Value {
+        Value::String(GcString { data }.alloc())
+    }
+
+    pub fn list(data: Vec<Value>) -> Value {
+        Value::List(GcList { data }.alloc())
     }
 
     pub fn ok(self) -> *mut GcAggregate {

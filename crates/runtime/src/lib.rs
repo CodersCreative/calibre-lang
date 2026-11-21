@@ -100,6 +100,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: string::calibre_to_string as *const u8,
         },
         RuntimeSymbol {
+            name: "calibre_as",
+            ptr: values::convert::calibre_as as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_string_index",
             ptr: string::calibre_string_index as *const u8,
         },

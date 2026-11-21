@@ -589,6 +589,39 @@ impl MirDataType {
     }
 
     // Only for cranelift
+    pub fn descriptor(self) -> String {
+        match self.unwrap_ffi() {
+            MirDataType::Null => "null".to_string(),
+            MirDataType::Bool => "bool".to_string(),
+            MirDataType::Int => "int".to_string(),
+            MirDataType::UInt => "uint".to_string(),
+            MirDataType::Byte => "byte".to_string(),
+            MirDataType::Float => "float".to_string(),
+            MirDataType::Big => "big".to_string(),
+            MirDataType::Str => "str".to_string(),
+            MirDataType::Char => "char".to_string(),
+            MirDataType::Range => "range".to_string(),
+            MirDataType::Dynamic => "dyn".to_string(),
+            MirDataType::Host => "host".to_string(),
+            MirDataType::List(inner) => format!("(list {})", inner.descriptor()),
+            MirDataType::Option(inner) => format!("(option {})", inner.descriptor()),
+            MirDataType::Result { ok, err } => {
+                format!("(result {} {})", ok.descriptor(), err.descriptor())
+            }
+            MirDataType::Ptr(inner) => format!("(ptr {})", inner.descriptor()),
+            MirDataType::Tuple(values) => format!(
+                "(tuple {})",
+                values
+                    .into_iter()
+                    .map(Self::descriptor)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            _ => "unsupported".to_string(),
+        }
+    }
+
+    // Only for cranelift
     pub fn type_tag<'a>(&self, mut enums: impl Iterator<Item = &'a TypeKey>) -> usize {
         match self {
             MirDataType::Null => 0,

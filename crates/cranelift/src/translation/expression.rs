@@ -3,9 +3,10 @@ use crate::{
     values::CompiledValue,
 };
 use calibre_lir::{
-    MirDataType, VariableKey,
-    ast::{LirAs, LirBinary, LirCall, LirComparison, LirIs, LirNodeType},
+    MirDataType,
+    ast::{LirAs, LirBinary, LirComparison, LirIs, LirLiteral},
 };
+use calibre_parser::ast::nodes::binary::AsFailureMode;
 use calibre_parser::ast::{binary::BinaryOperator, comparison::ComparisonOperator};
 use cranelift::codegen::ir::{
     InstBuilder, MachMemFlags, Type, Value,
@@ -14,6 +15,7 @@ use cranelift::codegen::ir::{
 use cranelift::prelude::types;
 use cranelift_module::Module;
 use std::error::Error;
+use ustr::Ustr;
 
 impl CraneliftTranslation for LirComparison {
     fn translate<'a, M: Module>(
@@ -426,110 +428,39 @@ impl CraneliftTranslation for LirAs {
         translator: &mut FunctionTranslator<'a, M>,
         _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        if matches!(&self.data_type, MirDataType::Str) {
-            return LirCall {
-                caller: Box::new(LirNodeType::load(VariableKey::from("calibre_to_string"))),
-                args: Box::new([*self.value]),
-                returns_value: true,
-                return_type: Some(MirDataType::Str),
-            }
-            .translate(translator, Some(MirDataType::Str));
+        let mut value = self.value.translate(translator, None)?;
+
+        while let MirDataType::Ref(inner, _) = value.data_type.clone() {
+            let payload = translator.runtime_call("calibre_deref", &[value.value])?;
+            value = CompiledValue::new(payload, *inner);
         }
 
-        let value = self.value.translate(translator, None)?;
-        let target = translator.types.to_cranelift_type(&self.data_type);
+        let tag =
+            translator.int_const(value.data_type.type_tag(translator.registry.enums()) as i64);
+        let payload = translator.convert_to_i64(value)?;
 
-        let value = match (value.data_type, &self.data_type) {
-            // int -> float
-            (MirDataType::Int, MirDataType::Float) => {
-                translator.builder.ins().fcvt_from_sint(target, value.value)
-            }
-            (MirDataType::UInt, MirDataType::Float) => {
-                translator.builder.ins().fcvt_from_uint(target, value.value)
-            }
-            (MirDataType::Byte, MirDataType::Float) => {
-                let value = translator.int_cast(translator.types.int(), value.value, false);
+        let descriptor = self.data_type.clone().descriptor();
+        let descriptor = LirLiteral::String(Ustr::from(descriptor.as_str()))
+            .translate(translator, Some(MirDataType::Str))?;
 
-                translator.builder.ins().fcvt_from_uint(target, value)
-            }
-            (MirDataType::Bool, MirDataType::Float) => {
-                let value = translator.int_cast(translator.types.int(), value.value, false);
+        let failure_mode = translator.int_const(self.failure_mode as i64);
 
-                translator.builder.ins().fcvt_from_uint(target, value)
-            }
-            (MirDataType::Char, MirDataType::Float) => {
-                let value = translator.int_cast(translator.types.int(), value.value, false);
+        let value = translator.runtime_call(
+            "calibre_as",
+            &[tag, payload, descriptor.value, failure_mode],
+        )?;
 
-                translator.builder.ins().fcvt_from_uint(target, value)
-            }
-
-            // float -> int
-            (MirDataType::Float, MirDataType::Int) => {
-                translator.builder.ins().fcvt_to_sint(target, value.value)
-            }
-            (MirDataType::Float, MirDataType::UInt) => {
-                translator.builder.ins().fcvt_to_uint(target, value.value)
-            }
-            (MirDataType::Float, MirDataType::Byte) => {
-                let value = translator
-                    .builder
-                    .ins()
-                    .fcvt_to_sint(translator.types.int(), value.value);
-
-                translator.builder.ins().ireduce(target, value)
-            }
-            (MirDataType::Float, MirDataType::Bool) => {
-                let value = translator
-                    .builder
-                    .ins()
-                    .fcvt_to_sint(translator.types.int(), value.value);
-
-                translator.builder.ins().ireduce(target, value)
-            }
-            (MirDataType::Float, MirDataType::Char) => {
-                let value = translator
-                    .builder
-                    .ins()
-                    .fcvt_to_sint(translator.types.int(), value.value);
-
-                translator.builder.ins().ireduce(target, value)
-            }
-
-            // Same Size
-            (MirDataType::Int, MirDataType::UInt) => value.value,
-            (MirDataType::UInt, MirDataType::Int) => value.value,
-
-            // Extend
-            (MirDataType::Byte, MirDataType::Int) => translator.int_cast(target, value.value, true),
-            (MirDataType::Byte, MirDataType::UInt) => {
-                translator.int_cast(target, value.value, false)
-            }
-            (MirDataType::Bool, MirDataType::Int) => translator.int_cast(target, value.value, true),
-            (MirDataType::Bool, MirDataType::UInt) => {
-                translator.int_cast(target, value.value, false)
-            }
-            (MirDataType::Char, MirDataType::Int) => translator.int_cast(target, value.value, true),
-            (MirDataType::Char, MirDataType::UInt) => {
-                translator.int_cast(target, value.value, false)
-            }
-
-            // Reduce
-            (MirDataType::Int, MirDataType::Byte)
-            | (MirDataType::Int, MirDataType::Bool)
-            | (MirDataType::Int, MirDataType::Char)
-            | (MirDataType::UInt, MirDataType::Byte)
-            | (MirDataType::UInt, MirDataType::Bool)
-            | (MirDataType::UInt, MirDataType::Char) => {
-                translator.int_cast(target, value.value, false)
-            }
-
-            _ => {
-                // TODO Use the runtime to check every other type
-                value.value
+        let data_type = match self.failure_mode {
+            AsFailureMode::Panic => self.data_type.clone(),
+            AsFailureMode::Option => MirDataType::option(self.data_type.clone()),
+            AsFailureMode::Result => {
+                MirDataType::result(self.data_type.clone(), MirDataType::Dynamic)
             }
         };
 
-        Ok(CompiledValue::new(value, self.data_type))
+        let value = translator.convert_from_i64(value, &data_type);
+
+        Ok(CompiledValue::new(value, data_type))
     }
 }
 

@@ -499,7 +499,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 let zero = self.builder.ins().f64const(0.0);
                 self.builder.ins().return_(&[zero]);
             } else {
-                let zero = self.int_const(0);
+                let ty = self.types.to_cranelift_type(&function.return_type);
+                let zero = self.builder.ins().iconst(ty, 0);
                 self.builder.ins().return_(&[zero]);
             }
         }
@@ -526,7 +527,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                     let zero = self.builder.ins().f64const(0.0);
                     self.builder.ins().return_(&[zero]);
                 } else {
-                    let zero = self.int_const(0);
+                    let ty = self.types.to_cranelift_type(&function.return_type);
+                    let zero = self.builder.ins().iconst(ty, 0);
                     self.builder.ins().return_(&[zero]);
                 }
             }
