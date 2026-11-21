@@ -417,7 +417,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_panic",
                 RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: None,
                     typed_return: None,
                 },
@@ -1415,7 +1415,7 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("ok", "calibre_result_ok"),
             ("err", "calibre_result_err"),
             ("some", "calibre_option_some"),
-            ("panic", "calibre_panic"),
+            ("console_panic", "calibre_panic"),
             ("console_output", "calibre_console_output"),
             ("console_input", "calibre_console_input"),
             ("trim", "calibre_trim"),

@@ -160,7 +160,7 @@ impl RuntimeValue {
                 ),
                 #[cfg(feature = "native")]
                 ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),
-                ("panic", Arc::new(native::global::PanicFn)),
+                ("console_panic", Arc::new(native::global::ConsolePanicFn)),
                 ("assert", Arc::new(native::global::AssertFn)),
                 (
                     "gen_suspend",

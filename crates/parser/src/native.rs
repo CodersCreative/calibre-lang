@@ -83,10 +83,8 @@ impl ParserDataType {
                     ParserInnerType::Dynamic,
                 ),
                 (
-                    "panic",
-                    vec![ParserInnerType::List(Box::new(Self::native_type(
-                        ParserInnerType::Dynamic,
-                    )))],
+                    "console_panic",
+                    vec![ParserInnerType::Str],
                     ParserInnerType::Never,
                 ),
             ];

@@ -20,11 +20,19 @@ pub mod time;
 
 // TODO Add debug information
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_panic(tag: ValueTag, value: i64) {
-    let value = Value::from_tag(tag, value);
-    let value = value.to_string();
+pub extern "C" fn calibre_panic(value: *mut GcString) {
+    if value.is_null() {
+        return;
+    }
 
-    eprintln!("calibre panicked with message: {}", value);
+    let value = unsafe { (*value).data.to_string() };
+
+    if value.is_empty() {
+        eprintln!("calibre panicked");
+    } else {
+        eprintln!("calibre panicked with message: {}", value);
+    }
+
     std::process::exit(1);
 }
 

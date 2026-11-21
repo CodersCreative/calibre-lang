@@ -8,7 +8,7 @@ use calibre_lir::{
 };
 use calibre_parser::ast::{binary::BinaryOperator, comparison::ComparisonOperator};
 use cranelift::codegen::ir::{
-    InstBuilder, MachMemFlags, Value,
+    InstBuilder, MachMemFlags, Type, Value,
     condcodes::{FloatCC, IntCC},
 };
 use cranelift::prelude::types;
@@ -344,6 +344,24 @@ impl CraneliftTranslation for LirBinary {
 }
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
+    fn int_cast(&mut self, target: Type, value: Value, signed: bool) -> Value {
+        let src = self.builder.func.dfg.value_type(value);
+
+        if src == target {
+            return value;
+        }
+
+        if src.bits() < target.bits() {
+            if signed {
+                self.builder.ins().sextend(target, value)
+            } else {
+                self.builder.ins().uextend(target, value)
+            }
+        } else {
+            self.builder.ins().ireduce(target, value)
+        }
+    }
+
     pub fn convert_to_i64(&mut self, value: CompiledValue) -> Result<Value, Box<dyn Error>> {
         match value.data_type.unwrap_ffi() {
             MirDataType::Int => Ok(value.value),
@@ -354,11 +372,38 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                     .ins()
                     .bitcast(types::I64, MachMemFlags::new(), value.value))
             }
-            MirDataType::Bool => Ok(self.builder.ins().uextend(types::I64, value.value)),
-            MirDataType::Byte => Ok(self.builder.ins().sextend(types::I64, value.value)),
-            MirDataType::Char => Ok(self.builder.ins().sextend(types::I64, value.value)),
+            MirDataType::Bool => Ok(self.int_cast(types::I64, value.value, false)),
+            MirDataType::Byte => Ok(self.int_cast(types::I64, value.value, true)),
+            MirDataType::Char => Ok(self.int_cast(types::I64, value.value, true)),
             _ => Ok(value.value),
         }
+    }
+
+    pub(crate) fn cast_to(&mut self, target: Type, value: CompiledValue) -> Value {
+        let src = self.builder.func.dfg.value_type(value.value);
+
+        if src == target {
+            return value.value;
+        }
+
+        if target.is_int() && src.is_int() {
+            let signed = matches!(
+                value.data_type.unwrap_ffi(),
+                MirDataType::Byte | MirDataType::Char
+            );
+            return self.int_cast(target, value.value, signed);
+        }
+
+        if target == types::F64 && src.is_int() {
+            let widened = self.int_cast(types::I64, value.value, true);
+            return self.builder.ins().fcvt_from_sint(target, widened);
+        }
+
+        if src == types::F64 && target.is_int() {
+            return self.builder.ins().fcvt_to_sint(target, value.value);
+        }
+
+        value.value
     }
 
     pub fn convert_from_i64(&mut self, value: Value, data_type: &MirDataType) -> Value {
@@ -368,10 +413,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                     .ins()
                     .bitcast(self.types.float(), MachMemFlags::new(), value)
             }
-            MirDataType::Bool | MirDataType::Byte => {
-                self.builder.ins().ireduce(self.types.bool(), value)
-            }
-            MirDataType::Char => self.builder.ins().ireduce(self.types.char(), value),
+            MirDataType::Bool | MirDataType::Byte => self.int_cast(self.types.bool(), value, false),
+            MirDataType::Char => self.int_cast(self.types.char(), value, false),
             _ => value,
         }
     }
@@ -405,26 +448,17 @@ impl CraneliftTranslation for LirAs {
                 translator.builder.ins().fcvt_from_uint(target, value.value)
             }
             (MirDataType::Byte, MirDataType::Float) => {
-                let value = translator
-                    .builder
-                    .ins()
-                    .uextend(translator.types.int(), value.value);
+                let value = translator.int_cast(translator.types.int(), value.value, false);
 
                 translator.builder.ins().fcvt_from_uint(target, value)
             }
             (MirDataType::Bool, MirDataType::Float) => {
-                let value = translator
-                    .builder
-                    .ins()
-                    .uextend(translator.types.int(), value.value);
+                let value = translator.int_cast(translator.types.int(), value.value, false);
 
                 translator.builder.ins().fcvt_from_uint(target, value)
             }
             (MirDataType::Char, MirDataType::Float) => {
-                let value = translator
-                    .builder
-                    .ins()
-                    .uextend(translator.types.int(), value.value);
+                let value = translator.int_cast(translator.types.int(), value.value, false);
 
                 translator.builder.ins().fcvt_from_uint(target, value)
             }
@@ -466,43 +500,27 @@ impl CraneliftTranslation for LirAs {
             (MirDataType::UInt, MirDataType::Int) => value.value,
 
             // Extend
-            (MirDataType::Byte, MirDataType::Int) => {
-                translator.builder.ins().sextend(target, value.value)
-            }
+            (MirDataType::Byte, MirDataType::Int) => translator.int_cast(target, value.value, true),
             (MirDataType::Byte, MirDataType::UInt) => {
-                translator.builder.ins().uextend(target, value.value)
+                translator.int_cast(target, value.value, false)
             }
-            (MirDataType::Bool, MirDataType::Int) => {
-                translator.builder.ins().sextend(target, value.value)
-            }
+            (MirDataType::Bool, MirDataType::Int) => translator.int_cast(target, value.value, true),
             (MirDataType::Bool, MirDataType::UInt) => {
-                translator.builder.ins().uextend(target, value.value)
+                translator.int_cast(target, value.value, false)
             }
-            (MirDataType::Char, MirDataType::Int) => {
-                translator.builder.ins().sextend(target, value.value)
-            }
+            (MirDataType::Char, MirDataType::Int) => translator.int_cast(target, value.value, true),
             (MirDataType::Char, MirDataType::UInt) => {
-                translator.builder.ins().uextend(target, value.value)
+                translator.int_cast(target, value.value, false)
             }
 
             // Reduce
-            (MirDataType::Int, MirDataType::Byte) => {
-                translator.builder.ins().ireduce(target, value.value)
-            }
-            (MirDataType::Int, MirDataType::Bool) => {
-                translator.builder.ins().ireduce(target, value.value)
-            }
-            (MirDataType::Int, MirDataType::Char) => {
-                translator.builder.ins().ireduce(target, value.value)
-            }
-            (MirDataType::UInt, MirDataType::Byte) => {
-                translator.builder.ins().ireduce(target, value.value)
-            }
-            (MirDataType::UInt, MirDataType::Bool) => {
-                translator.builder.ins().ireduce(target, value.value)
-            }
-            (MirDataType::UInt, MirDataType::Char) => {
-                translator.builder.ins().ireduce(target, value.value)
+            (MirDataType::Int, MirDataType::Byte)
+            | (MirDataType::Int, MirDataType::Bool)
+            | (MirDataType::Int, MirDataType::Char)
+            | (MirDataType::UInt, MirDataType::Byte)
+            | (MirDataType::UInt, MirDataType::Bool)
+            | (MirDataType::UInt, MirDataType::Char) => {
+                translator.int_cast(target, value.value, false)
             }
 
             _ => {

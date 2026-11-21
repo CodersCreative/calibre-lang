@@ -5,7 +5,7 @@ use crate::{
 };
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{LirCall, LirLoad, LirNodeType};
-use cranelift::codegen::ir::{InstBuilder, Signature, Value, types};
+use cranelift::codegen::ir::{InstBuilder, Signature, Type, Value, types};
 use cranelift::codegen::isa::CallConv;
 use cranelift::prelude::AbiParam;
 use cranelift_module::Module;
@@ -86,13 +86,25 @@ impl CraneliftTranslation for LirCall {
                 .declare_func_in_func(func_id, translator.builder.func);
             let function = translator.registry.functions.get(&key);
 
+            let param_types: Vec<Type> = function
+                .map(|f| {
+                    f.params
+                        .iter()
+                        .map(|p| translator.types.to_cranelift_type(&p.data_type))
+                        .collect()
+                })
+                .unwrap_or_default();
+
             let mut arg_values = self
                 .args
                 .into_iter()
-                .map(|arg| {
+                .enumerate()
+                .map(|(i, arg)| {
                     let arg = arg.translate(translator, None)?;
-                    arg_types.push(arg.data_type);
-                    Ok(arg.value)
+                    arg_types.push(arg.data_type.clone());
+
+                    let target = param_types.get(i).copied().unwrap_or(types::I64);
+                    Ok(translator.cast_to(target, arg))
                 })
                 .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 

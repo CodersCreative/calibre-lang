@@ -16,6 +16,13 @@ const print := fn (msg : list:<str>) => {
 	console_output(1, txt & "\n");
 };
 
+const panic := fn (msg : list:<str>) => {
+	let mut txt := "";
+	for m in msg => txt &= m;
+	
+	console_panic(txt & "\n");
+};
+
 @pure
 const range := fn (mut start mut end : int, step : int = 1, inclusive : bool = false) -> gen:<int> => {
 	if (start != INT_MIN) && (end = INT_MIN) => {

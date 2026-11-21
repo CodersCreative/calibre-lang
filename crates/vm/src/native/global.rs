@@ -166,12 +166,13 @@ impl NativeFunction for SomeFn {
     }
 }
 
-pub struct PanicFn;
+pub struct ConsolePanicFn;
 
-impl NativeFunction for PanicFn {
+impl NativeFunction for ConsolePanicFn {
     fn name(&self) -> String {
-        String::from("panic")
+        String::from("console_panic")
     }
+
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let msg = args.first().map(panic_message_arg);
         Err(RuntimeError::Panic(msg))

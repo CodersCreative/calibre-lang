@@ -106,9 +106,16 @@ impl CraneliftTranslation for LirLiteral {
                 Ok(CompiledValue::new(ptr, MirDataType::Str))
             }
             LirLiteral::Null => {
-                let value = translator.builder.ins().iconst(translator.types.int(), 0);
+                let data_type = data_type.unwrap_or(MirDataType::Null);
+                let ty = translator.types.to_cranelift_type(&data_type);
 
-                Ok(CompiledValue::new(value, MirDataType::Null))
+                let value = if ty == types::F64 {
+                    translator.builder.ins().f64const(0.0)
+                } else {
+                    translator.builder.ins().iconst(ty, 0)
+                };
+
+                Ok(CompiledValue::new(value, data_type))
             }
             LirLiteral::Big(x) => {
                 if let Ok(x) = x.parse::<f64>() {
@@ -214,22 +221,23 @@ impl CraneliftTranslation for LirAggregate {
         for (i, (_, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
             let field = value.translate(translator, None)?;
 
-            let tag = translator.builder.ins().iconst(
-                translator.types.int(),
-                field.data_type.type_tag(translator.registry.enums()) as i64,
-            );
+            let tag =
+                translator.int_const(field.data_type.type_tag(translator.registry.enums()) as i64);
 
             let index = translator
                 .builder
                 .ins()
                 .iconst(translator.types.int(), i as i64);
 
+            let field_data_type = field.data_type.clone();
+            let payload = translator.convert_to_i64(field)?;
+
             translator
                 .builder
                 .ins()
-                .call(set_field_func_ref, &[ptr, index, tag, field.value]);
+                .call(set_field_func_ref, &[ptr, index, tag, payload]);
 
-            field_types.push(field.data_type);
+            field_types.push(field_data_type);
         }
 
         let data_type = if let Some(name) = self.name {
@@ -259,16 +267,15 @@ impl CraneliftTranslation for LirEnum {
         let (tag, payload) = if let Some(payload) = self.payload {
             let compiled = payload.translate(translator, None)?;
 
-            let tag = translator.builder.ins().iconst(
-                translator.types.int(),
-                compiled.data_type.type_tag(translator.registry.enums()) as i64,
-            );
+            let tag = translator
+                .int_const(compiled.data_type.type_tag(translator.registry.enums()) as i64);
 
-            (tag, compiled.value)
+            let payload = translator.convert_to_i64(compiled)?;
+
+            (tag, payload)
         } else {
-            let tag = translator.builder.ins().iconst(translator.types.int(), 0);
-
-            let payload = translator.builder.ins().iconst(translator.types.int(), 0);
+            let tag = translator.int_const(0);
+            let payload = translator.int_const(0);
 
             (tag, payload)
         };
@@ -339,18 +346,21 @@ impl CraneliftTranslation for LirList {
         for value in std::mem::take(&mut self.values) {
             let value = value.translate(translator, Some(self.data_type.clone()))?;
 
-            let tag = translator.builder.ins().iconst(
-                translator.types.int(),
-                value.data_type.type_tag(translator.registry.enums()) as i64,
-            );
+            let tag =
+                translator.int_const(value.data_type.type_tag(translator.registry.enums()) as i64);
+
+            let payload = translator.convert_to_i64(value)?;
 
             translator
                 .builder
                 .ins()
-                .call(push_func_ref, &[ptr, tag, value.value]);
+                .call(push_func_ref, &[ptr, tag, payload]);
         }
 
-        Ok(CompiledValue::new(ptr, self.data_type))
+        Ok(CompiledValue::new(
+            ptr,
+            MirDataType::List(Box::new(self.data_type)),
+        ))
     }
 }
 
