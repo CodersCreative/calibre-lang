@@ -112,12 +112,6 @@ pub extern "C" fn calibre_min_or_zero(tag: ValueTag, value: i64) -> i64 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_gen_suspend(value: i64) -> i64 {
-    // TODO Implement proper suspend with state machine
-    value
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn calibre_exit(value: u64) -> ! {
     exit(value as i32)
 }

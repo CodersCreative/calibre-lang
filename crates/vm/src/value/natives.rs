@@ -162,10 +162,6 @@ impl RuntimeValue {
                 ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),
                 ("console_panic", Arc::new(native::global::ConsolePanicFn)),
                 ("assert", Arc::new(native::global::AssertFn)),
-                (
-                    "gen_suspend",
-                    Arc::new(stdlib::generator::GeneratorSuspendFn),
-                ),
                 ("min_or_zero", Arc::new(native::global::MinOrZero)),
                 ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew)),
                 ("async.channel_send", Arc::new(stdlib::r#async::ChannelSend)),

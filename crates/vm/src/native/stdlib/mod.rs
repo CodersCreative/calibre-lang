@@ -3,7 +3,6 @@ pub mod collections;
 pub mod console;
 pub mod crypto;
 pub mod env;
-pub mod generator;
 pub mod list;
 pub mod process;
 pub mod random;

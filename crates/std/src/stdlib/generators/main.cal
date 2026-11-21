@@ -1,12 +1,17 @@
-const suspend := fn <T> (value : T) -> T => return gen_suspend(value);
-
 impl<T> gen:<T> {
 	const next := fn (self : &mut Self) -> T? => {
 		if self is host =>
 			return self.gen_next;
 
 		if self.done => return none;
-		let value : T? = (self.data)();
+		let value : T? = (self.data)(self.state);
+
+		if value.is_none() => {
+			self.done := true;
+			return none;
+		};
+		
+		self.index += 1;
 		return value;
 	};
 

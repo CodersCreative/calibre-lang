@@ -19,17 +19,14 @@ impl VMEvaluation for VMCall {
     fn run(
         &self,
         vm: &mut VM,
-        block: &VMBlock,
-        ip: u32,
-        prev_block: Option<BlockId>,
+        _block: &VMBlock,
+        _ip: u32,
+        _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         if let Some(step) = vm.call_registers(RegisterCall {
             dst: self.dst,
             callee: self.callee,
             args: &self.args,
-            block,
-            ip,
-            prev_block,
         })? {
             return Ok(step);
         }

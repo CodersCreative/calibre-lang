@@ -553,14 +553,6 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: Some(MirDataType::Int),
                 },
             ),
-            (
-                "calibre_gen_suspend",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Dynamic),
-                },
-            ),
             // console
             (
                 "calibre_console_input_stream",
@@ -1435,7 +1427,6 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("wait", "calibre_wait"),
             ("len", "calibre_len"),
             ("min_or_zero", "calibre_min_or_zero"),
-            ("gen_suspend", "calibre_gen_suspend"),
             // console
             ("console.input_stream", "calibre_console_input_stream"),
             // env

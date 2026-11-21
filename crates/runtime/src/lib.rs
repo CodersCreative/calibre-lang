@@ -227,10 +227,6 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: native::calibre_min_or_zero as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_gen_suspend",
-            ptr: native::calibre_gen_suspend as *const u8,
-        },
-        RuntimeSymbol {
             name: "calibre_panic",
             ptr: native::calibre_panic as *const u8,
         },

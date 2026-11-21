@@ -7,7 +7,7 @@ type ExecContext := struct {
 	span : range
 };
 
-type gen:<T> := struct { data : fn () -> T?, index : int, done : bool };
+type gen:<T> := struct { data : fn (&mut dyn) -> T?, state : dyn, index : int, done : bool };
 
 const print := fn (msg : list:<str>) => {
 	let mut txt := "";

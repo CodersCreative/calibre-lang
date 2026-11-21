@@ -16,14 +16,14 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        ObjectType,
+        ObjectType, RefMutability,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
             binary::{AsFailureMode, AstAs},
             declaration::AstDeclaration,
-            functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
+            functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader, FunctionParam},
             lists::AstList,
             literals::{AstString, AstStruct},
             memory::AstRef,
@@ -41,12 +41,21 @@ impl MiddleEnvironment {
         &mut self,
         _scope: ScopeId,
         body: AstNode,
-        elem_type: MirDataType,
+        elem_type: ParserDataType,
         span: Span,
     ) -> AstNode {
         let next_name = self.context.get_temp("gen_next");
+        let state_name = self.context.get_temp("gen_state_obj");
+        let param_name = self.context.get_temp("gen_state");
 
-        let elem_type: ParserDataType = elem_type.into();
+        let dyn_ref_type = ParserDataType::new(
+            span,
+            ParserInnerType::Ref(
+                Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
+                RefMutability::MutRef,
+            ),
+        );
+
         let next_body = AstNode::new_temp_scope(
             body.nodes()
                 .into_iter()
@@ -61,7 +70,7 @@ impl MiddleEnvironment {
                 identifier: PotentialDollarIdentifier::new(span, next_name.clone()),
                 data_type: ParserDataType::function(
                     span,
-                    Vec::new(),
+                    vec![dyn_ref_type.clone()],
                     ParserDataType::new(span, ParserInnerType::Option(Box::new(elem_type.clone()))),
                 ),
                 value: Box::new(AstNode::new(
@@ -69,7 +78,15 @@ impl MiddleEnvironment {
                     AstNodeType::FunctionDeclaration(AstFunction {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
-                            parameters: Vec::new(),
+                            parameters: vec![FunctionParam {
+                                var_type: VarType::Mutable,
+                                identifier: PotentialDollarIdentifier::new(
+                                    span,
+                                    param_name.clone(),
+                                ),
+                                data_type: Some(dyn_ref_type),
+                                default: None,
+                            }],
                             return_type: ParserDataType::new(
                                 span,
                                 ParserInnerType::Option(Box::new(elem_type.clone())),
@@ -79,6 +96,17 @@ impl MiddleEnvironment {
                         body: Box::new(next_body),
                     }),
                 )),
+                declared: false,
+            }),
+        );
+
+        let state_decl = AstNode::new(
+            span,
+            AstNodeType::VariableDeclaration(AstDeclaration {
+                var_type: VarType::Mutable,
+                identifier: PotentialDollarIdentifier::new(span, state_name.clone()),
+                data_type: ParserDataType::new(span, ParserInnerType::Dynamic),
+                value: Box::new(AstNode::null(span)),
                 declared: false,
             }),
         );
@@ -95,13 +123,17 @@ impl MiddleEnvironment {
                 }),
                 value: ObjectType::Map(vec![
                     (Ustr::from("data"), AstNode::identifier(span, &next_name)),
+                    (Ustr::from("state"), AstNode::identifier(span, &state_name)),
                     (Ustr::from("index"), AstNode::int(span, 0)),
                     (Ustr::from("done"), AstNode::bool(span, false)),
                 ]),
             }),
         );
 
-        AstNode::new_temp_scope_with_create(vec![next_decl, AstNode::ret(gen_value)], true)
+        AstNode::new_temp_scope_with_create(
+            vec![state_decl, next_decl, AstNode::ret(gen_value)],
+            true,
+        )
     }
 
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {
@@ -472,7 +504,7 @@ impl MirLowering for AstFunction {
         if let Some(elem_type) = return_type.clone().get_gen()
             && !env.tagging.tag_info.contains(&TagInfo::ReturnsGen)
         {
-            body = MiddleEnvironment::wrap_generator_body(env, scope, body, elem_type, span);
+            body = MiddleEnvironment::wrap_generator_body(env, scope, body, elem_type.into(), span);
             env.context.in_generator = true;
         }
 

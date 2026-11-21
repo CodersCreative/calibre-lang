@@ -2,7 +2,7 @@
 use crate::value::ffi::ExternFunction;
 use crate::{
     VM,
-    native::{NativeFunction, stdlib::generator::GeneratorState},
+    native::NativeFunction,
     value::{
         hashable::{RuntimeHashMap, RuntimeHashSet},
         spawn::{ChannelInner, MutexGuardInner, MutexInner, WaitGroupInner},
@@ -273,11 +273,6 @@ pub enum RuntimeValue {
         name: VariableKey,
         captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
     },
-    Generator {
-        type_name: TypeImplKey,
-        state: Arc<Mutex<GeneratorState>>,
-    },
-    GeneratorSuspend(Box<RuntimeValue>),
     Host(Host),
 }
 
@@ -318,8 +313,6 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 }
                 Ok(())
             }
-            RuntimeValue::Generator { .. } => Ok(()),
-            RuntimeValue::GeneratorSuspend(value) => value.accept(visitor),
             #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
@@ -388,7 +381,6 @@ impl RuntimeValue {
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
                 Some(TypeImplKey::from(name.clone()))
             }
-            RuntimeValue::Generator { type_name, .. } => Some(type_name.clone()),
             RuntimeValue::List(_) => Some(TypeImplKey::List),
             RuntimeValue::Option(_) => Some(TypeImplKey::Option),
             RuntimeValue::Result(_) => Some(TypeImplKey::Result),

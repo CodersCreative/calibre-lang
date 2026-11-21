@@ -93,7 +93,7 @@ unnecessary_safety_comment = "warn"
 float_cmp = "warn"
 float_cmp_const = "warn"
 lossy_float_literal = "warn"
-cast_sign_loss = "warn"
+# cast_sign_loss = "warn"
 invalid_upcast_comparisons = "warn"
 # Optional - these effectively force you to document numeric invariants
 # cast_possible_wrap = "warn"

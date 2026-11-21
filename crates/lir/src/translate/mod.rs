@@ -123,6 +123,7 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower(env: &'a MiddleEnvironment, node: MiddleNode) -> LirRegistry {
         let mut this = Self::new(env);
         this.lower_and_add_node(node);
+        this.registry.lower_generators();
 
         info!(
             functions = this.registry.functions.len(),
@@ -141,6 +142,7 @@ impl<'a> LirEnvironment<'a> {
         debug!("lowering with root");
         let mut this = Self::new(env);
         this.lower_and_add_node(node);
+
         if !this.blocks.is_empty() {
             debug!("creating global for root");
             let blocks = std::mem::take(&mut this.blocks)
@@ -158,6 +160,8 @@ impl<'a> LirEnvironment<'a> {
                 },
             );
         }
+
+        this.registry.lower_generators();
         this.registry
     }
 

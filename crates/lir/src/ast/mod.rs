@@ -10,6 +10,7 @@ use calibre_parser::{
     },
 };
 use derive_builder::Builder;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ustr::Ustr;
@@ -314,6 +315,191 @@ impl LirNodeType {
     pub fn is_assignment(&self) -> bool {
         matches!(self, LirNodeType::Assign(_))
     }
+
+    pub fn deref_member(param: &VariableKey, field: Ustr) -> LirNodeType {
+        LirNodeType::Deref(LirDeref {
+            value: Box::new(LirNodeType::member(param, field)),
+        })
+    }
+
+    pub fn member(param: &VariableKey, field: Ustr) -> LirNodeType {
+        LirNodeType::Member(LirMember {
+            base: Box::new(LirNodeType::load(param.clone())),
+            field,
+        })
+    }
+
+    pub fn assign(dest: LirLValue, value: LirNodeType) -> LirNodeType {
+        LirNodeType::Assign(LirAssign {
+            dest,
+            value: Box::new(value),
+        })
+    }
+
+    pub fn declare(dest: VariableKey, value: LirNodeType, data_type: MirDataType) -> LirNodeType {
+        LirNodeType::Declare(LirDeclare {
+            dest,
+            value: Box::new(value),
+            data_type,
+            is_referenced: true,
+        })
+    }
+
+    pub fn collect_aggregates(&self, out: &mut Vec<LirAggregate>) {
+        match self {
+            LirNodeType::Call(c) => {
+                c.caller.collect_aggregates(out);
+
+                for a in c.args.iter() {
+                    a.collect_aggregates(out);
+                }
+            }
+            LirNodeType::Deref(d) => d.value.collect_aggregates(out),
+            LirNodeType::Ref(r) => r.value.collect_aggregates(out),
+            LirNodeType::Clone(c) => c.value.collect_aggregates(out),
+            LirNodeType::Binary(b) => {
+                b.left.collect_aggregates(out);
+                b.right.collect_aggregates(out);
+            }
+            LirNodeType::Comparison(c) => {
+                c.left.collect_aggregates(out);
+                c.right.collect_aggregates(out);
+            }
+            LirNodeType::As(a) => a.value.collect_aggregates(out),
+            LirNodeType::Is(x) => x.value.collect_aggregates(out),
+            LirNodeType::Range(x) => {
+                x.from.collect_aggregates(out);
+                x.to.collect_aggregates(out);
+            }
+            LirNodeType::List(x) => {
+                for x in x.values.iter() {
+                    x.collect_aggregates(out);
+                }
+            }
+            LirNodeType::Aggregate(x) => {
+                out.push(x.clone());
+
+                for (_, x) in x.fields.0.iter() {
+                    x.collect_aggregates(out);
+                }
+            }
+            LirNodeType::Enum(x) => {
+                if let Some(x) = &x.payload {
+                    x.collect_aggregates(out);
+                }
+            }
+            LirNodeType::Index(x) => {
+                x.base.collect_aggregates(out);
+                x.index.collect_aggregates(out);
+            }
+            LirNodeType::Member(x) => x.base.collect_aggregates(out),
+            LirNodeType::Discriminant(x) => x.value.collect_aggregates(out),
+            LirNodeType::Spawn(x) => x.value.collect_aggregates(out),
+            LirNodeType::Assign(x) => {
+                if let LirLValue::Ptr(x) = &x.dest {
+                    x.collect_aggregates(out);
+                }
+
+                x.value.collect_aggregates(out);
+            }
+            LirNodeType::Declare(x) => x.value.collect_aggregates(out),
+            _ => {}
+        }
+    }
+
+    pub fn defs(&self, out: &mut FxHashSet<VariableKey>) {
+        match self {
+            LirNodeType::Declare(LirDeclare { dest, .. }) => {
+                out.insert(dest.clone());
+            }
+            LirNodeType::Assign(LirAssign {
+                dest: LirLValue::Var(k),
+                ..
+            }) => {
+                out.insert(k.clone());
+            }
+            LirNodeType::Move(LirMove { value }) | LirNodeType::Drop(LirDrop { value }) => {
+                out.insert(value.clone());
+            }
+            _ => {}
+        }
+    }
+
+    pub fn uses(&self, out: &mut FxHashSet<VariableKey>) {
+        match self {
+            LirNodeType::Load(LirLoad { value }) | LirNodeType::RefLoad(LirRefLoad { value }) => {
+                out.insert(value.clone());
+            }
+            LirNodeType::Move(LirMove { value }) => {
+                out.insert(value.clone());
+            }
+            LirNodeType::Clone(x) => x.value.uses(out),
+            LirNodeType::Deref(x) => x.value.uses(out),
+            LirNodeType::Ref(x) => x.value.uses(out),
+            LirNodeType::Binary(x) => {
+                x.left.uses(out);
+                x.right.uses(out);
+            }
+            LirNodeType::Comparison(x) => {
+                x.left.uses(out);
+                x.right.uses(out);
+            }
+            LirNodeType::As(x) => x.value.uses(out),
+            LirNodeType::Is(x) => x.value.uses(out),
+            LirNodeType::Range(x) => {
+                x.from.uses(out);
+                x.to.uses(out);
+            }
+            LirNodeType::List(x) => {
+                for x in x.values.iter() {
+                    x.uses(out);
+                }
+            }
+            LirNodeType::Aggregate(x) => {
+                for (_, x) in x.fields.0.iter() {
+                    x.uses(out);
+                }
+            }
+            LirNodeType::Enum(x) => {
+                if let Some(x) = &x.payload {
+                    x.uses(out);
+                }
+            }
+            LirNodeType::Index(x) => {
+                x.base.uses(out);
+                x.index.uses(out);
+            }
+            LirNodeType::Member(x) => x.base.uses(out),
+            LirNodeType::Discriminant(x) => x.value.uses(out),
+            LirNodeType::Spawn(x) => x.value.uses(out),
+            LirNodeType::Call(x) => {
+                x.caller.uses(out);
+                for x in x.args.iter() {
+                    x.uses(out);
+                }
+            }
+            LirNodeType::Assign(x) => {
+                if let LirLValue::Ptr(x) = &x.dest {
+                    x.uses(out);
+                }
+
+                x.value.uses(out);
+            }
+            LirNodeType::Declare(x) => x.value.uses(out),
+            _ => {}
+        }
+    }
+
+    pub fn callee_key(&self) -> Option<&VariableKey> {
+        if let LirNodeType::Call(LirCall { caller, .. }) = self
+            && let LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value }) =
+                caller.as_ref()
+        {
+            return Some(value);
+        }
+
+        None
+    }
 }
 
 impl Display for LirNodeType {
@@ -499,6 +685,36 @@ pub enum LirTerminator {
         span: Span,
         value: Option<LirNodeType>,
     },
+}
+
+impl LirTerminator {
+    pub fn uses(&self, out: &mut FxHashSet<VariableKey>) {
+        match self {
+            LirTerminator::Branch { condition, .. } => condition.uses(out),
+            LirTerminator::Return { value: Some(v), .. } => v.uses(out),
+            _ => {}
+        }
+    }
+
+    pub fn successors(&self) -> Vec<BlockId> {
+        match self {
+            LirTerminator::Jump { target, .. } => vec![*target],
+            LirTerminator::Branch {
+                then_block,
+                else_block,
+                ..
+            } => {
+                let mut v = vec![*then_block];
+
+                if let Some(e) = else_block {
+                    v.push(*e);
+                }
+
+                v
+            }
+            LirTerminator::Return { .. } => vec![],
+        }
+    }
 }
 
 impl Display for LirTerminator {

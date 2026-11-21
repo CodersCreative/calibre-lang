@@ -140,7 +140,7 @@ impl VM {
             MirDataType::UInt => matches!(value, RuntimeValue::UInt(_)),
             MirDataType::Host => matches!(value, RuntimeValue::Host(_) | RuntimeValue::Reader(_)),
             MirDataType::Struct { identifier, .. } if identifier.name() == "gen" => {
-                matches!(value, RuntimeValue::Generator { .. })
+                matches!(value, RuntimeValue::Aggregate(..))
             }
             MirDataType::Byte => matches!(value, RuntimeValue::Byte(_)),
             MirDataType::Null => matches!(value, RuntimeValue::Null),
@@ -203,9 +203,6 @@ impl VM {
             MirDataType::Struct { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
                     actual == identifier
-                }
-                RuntimeValue::Generator { type_name, .. } => {
-                    identifier.name() == type_name.name().as_str()
                 }
                 _ => false,
             },

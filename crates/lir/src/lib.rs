@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod dead_code;
 pub mod environment;
+pub mod generator;
 pub mod translate;
 
 pub use calibre_mir::{

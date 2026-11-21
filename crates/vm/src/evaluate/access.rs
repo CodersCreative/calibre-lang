@@ -2,14 +2,13 @@ use crate::{
     VM,
     error::RuntimeError,
     evaluate::instruction::{VMEvaluation, resolve_slice_range},
-    native::stdlib::generator::GeneratorResumeFn,
     value::{GcVec, RuntimeValue, TerminateValue, ValueSlot, hashable::HashKey},
 };
 use calibre_bytecode::{
     VMBlock,
     instructions::access::{VMDiscriminant, VMIndex, VMLoadMember},
 };
-use calibre_lir::{FullyQualifiedPath, TypeImplKey, TypeKey, ast::BlockId};
+use calibre_lir::{FullyQualifiedPath, TypeKey, ast::BlockId};
 use std::sync::Arc;
 use tracing::instrument;
 use ustr::Ustr;
@@ -81,22 +80,6 @@ impl VMEvaluation for VMLoadMember {
 
         let val = match resolved {
             RuntimeValue::Null if member == "done" => RuntimeValue::Bool(true),
-            RuntimeValue::Generator {
-                type_name: TypeImplKey::Nominal(type_name),
-                state,
-            } => match member.as_str() {
-                "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
-                    state: state.clone(),
-                })),
-                "index" => RuntimeValue::Int(state.lock().map(|x| x.index).unwrap_or_default()),
-                "done" => RuntimeValue::Bool(state.lock().ok().is_none_or(|x| x.completed)),
-                _ => {
-                    return Err(missing(RuntimeValue::Generator {
-                        type_name: TypeImplKey::Nominal(type_name.clone()),
-                        state,
-                    }));
-                }
-            },
             RuntimeValue::Reader(reader) => match member.as_str() {
                 "gen_next" | "next" => {
                     RuntimeValue::Option(reader.0.lock().ok().and_then(|mut x| {

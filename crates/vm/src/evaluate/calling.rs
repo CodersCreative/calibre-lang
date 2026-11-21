@@ -4,7 +4,7 @@ use crate::{
     error::RuntimeError,
     value::{DeepClone, RuntimeValue, TerminateValue, hashable::HashKey},
 };
-use calibre_bytecode::{Reg, VMBlock, VMFunction};
+use calibre_bytecode::{Reg, VMFunction};
 use calibre_lir::{VariableKey, ast::BlockId};
 use calibre_parser::ast::nodes::VarType;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -141,9 +141,6 @@ pub(crate) struct RegisterCall<'a> {
     pub dst: Option<Reg>,
     pub callee: Reg,
     pub args: &'a [Reg],
-    pub block: &'a VMBlock,
-    pub ip: u32,
-    pub prev_block: Option<BlockId>,
 }
 
 impl VM {
@@ -215,7 +212,6 @@ impl VM {
     ) -> Result<Option<RuntimeValue>, RuntimeError> {
         trace!("running function with budget");
         let caller_frame = self.frames.len().saturating_sub(1);
-        state.yielded = None;
 
         #[cfg(feature = "native")]
         if function.params.is_empty()
@@ -367,12 +363,11 @@ impl VM {
                     block,
                     ip,
                     prev_block,
-                    yielded,
+                    yielded: _,
                 } => {
                     state.block = Some(block);
                     state.ip = ip;
                     state.prev_block = prev_block;
-                    state.yielded = yielded;
                     return Ok(None);
                 }
                 TerminateValue::None => break,
@@ -404,39 +399,15 @@ impl VM {
         dst: Option<u16>,
         func: &Arc<dyn crate::NativeFunction>,
         args: &[u16],
-        block: &VMBlock,
-        ip: u32,
-        prev_block: Option<BlockId>,
     ) -> Result<Option<TerminateValue>, RuntimeError> {
         let result = func.run(self, self.collect_call_args_vec(args))?;
-
-        if let RuntimeValue::GeneratorSuspend(value) = result {
-            let yielded = *value;
-            if let Some(dst) = dst {
-                self.set_reg_value(dst, yielded.clone());
-            }
-
-            return Ok(Some(TerminateValue::Yield {
-                block: block.id,
-                ip: ip as usize + 1,
-                prev_block,
-                yielded: Some(yielded),
-            }));
-        }
         self.store_call_result(dst, result);
         Ok(None)
     }
 
     pub(crate) fn call_registers(
         &mut self,
-        RegisterCall {
-            dst,
-            callee,
-            args,
-            block,
-            ip,
-            prev_block,
-        }: RegisterCall<'_>,
+        RegisterCall { dst, callee, args }: RegisterCall<'_>,
     ) -> Result<Option<TerminateValue>, RuntimeError> {
         match self.resolve_value_from_ref(self.get_reg_value(callee))? {
             RuntimeValue::Function { name, captures } => {
@@ -455,9 +426,7 @@ impl VM {
                 return Ok(None);
             }
             RuntimeValue::NativeFunction(func) => {
-                if let Some(step) =
-                    self.handle_call_result(dst, &func, args, block, ip, prev_block)?
-                {
+                if let Some(step) = self.handle_call_result(dst, &func, args)? {
                     return Ok(Some(step));
                 }
             }

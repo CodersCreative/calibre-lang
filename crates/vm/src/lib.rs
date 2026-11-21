@@ -59,7 +59,6 @@ pub struct TaskState {
     pub block: Option<BlockId>,
     pub ip: usize,
     pub prev_block: Option<BlockId>,
-    pub yielded: Option<RuntimeValue>,
 }
 
 #[derive(Debug)]
@@ -780,7 +779,6 @@ impl VM {
             RuntimeValue::Enum(_, _, Some(x)) => {
                 self.drop_runtime_value_inner_ref(&x.get(), seen, seen_regs);
             }
-            RuntimeValue::Generator { .. } => {}
             RuntimeValue::Channel(ch) => {
                 if let Ok(mut queue) = ch.queue.try_lock() {
                     while let Some(item) = queue.pop_front() {

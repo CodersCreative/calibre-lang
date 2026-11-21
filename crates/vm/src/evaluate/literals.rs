@@ -2,19 +2,17 @@ use crate::{
     VM,
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
-    native::stdlib::generator::GeneratorState,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue, ValueSlot},
 };
 use calibre_bytecode::{
     VMBlock, VMLiteral,
     instructions::literals::{VMAggregate, VMEnum, VMList, VMLoadLiteral, VMRange},
 };
-use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
+use calibre_lir::ast::BlockId;
 use calibre_parser::ast::ObjectMap;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tracing::instrument;
-use wasm_sync::Mutex;
 
 impl VMEvaluation for VMLoadLiteral {
     #[instrument(skip_all)]
@@ -162,53 +160,6 @@ impl VMEvaluation for VMAggregate {
         for (name, reg) in layout.members.iter().zip(self.fields.iter()) {
             let value = vm.resolve_value_from_ref(vm.get_reg_value(*reg))?;
             entries.push((name, value));
-        }
-
-        if let Some(type_name) = &layout.name
-            && type_name.name() == "gen"
-        {
-            let next_fn = entries.iter().find_map(|(field, value)| {
-                let short = field.rsplit(".").next().unwrap_or(field.as_str());
-                (short == "data").then(|| value.clone())
-            });
-
-            if let Some(RuntimeValue::Function { name, captures }) = next_fn {
-                let resolved_caps: Vec<(VariableKey, RuntimeValue)> = captures
-                    .iter()
-                    .map(|(k, v)| {
-                        let resolved = vm.resolve_value_from_ref(v).unwrap_or_else(|_| v.clone());
-                        (k.clone(), resolved)
-                    })
-                    .collect();
-
-                let mut gen_vm =
-                    VM::new_shared(vm.registry.clone(), vm.mappings.clone(), vm.config.clone());
-
-                for (k, v) in &resolved_caps {
-                    gen_vm.variables.insert(k.clone(), v.clone());
-                }
-
-                if !vm.ptr_heap.is_empty() {
-                    gen_vm.ptr_heap = vm.ptr_heap.clone();
-                }
-
-                vm.set_reg_value(
-                    self.dst,
-                    RuntimeValue::Generator {
-                        type_name: TypeImplKey::from(type_name.clone()),
-                        state: Arc::new(Mutex::new(GeneratorState {
-                            vm: gen_vm,
-                            function_name: name,
-                            captures: Arc::new(resolved_caps),
-                            task_state: crate::TaskState::default(),
-                            index: 0,
-                            completed: false,
-                        })),
-                    },
-                );
-
-                return Ok(TerminateValue::None);
-            }
         }
 
         vm.set_reg_value(
