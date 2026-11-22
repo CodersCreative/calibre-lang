@@ -375,7 +375,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 }
             }
 
-            if needs_box {
+            if !needs_box {
                 self.variables
                     .insert(param.identifier.clone(), (param.data_type.clone(), var));
             }
