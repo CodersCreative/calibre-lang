@@ -1473,16 +1473,71 @@ impl MirLowering for AstCall {
                 .ok()?
                 .unwrap_dollar();
 
-            if !member_name.is_empty() {
-                if let Some(ty) = &base.type_of(env, scope, span).or_else(|| {
+            if !member_name.is_empty()
+                && let Some(data_type) = &base.type_of(env, scope, span).or_else(|| {
                     if let AstNodeType::Identifier(id) = &base.node_type {
                         env.resolve_to_data_type(scope, &id.value).ok()
                     } else {
                         None
                     }
-                }) && let Some(method_ty) = env.resolve_member_fn_type(ty, &member_name)
+                })
+            {
+                if let Some((member, bindings)) = env
+                    .typing
+                    .find_impl_member_with_subst(data_type, member_name)
                 {
-                    return method_ty.apply_callable();
+                    let symbol_name = member.symbol_name.clone();
+                    let generic_params = env
+                        .monomorphizer
+                        .function_template(&symbol_name)
+                        .map(|(params, _, _)| params.clone())
+                        .unwrap_or_else(|| member.generic_params.clone());
+
+                    if !generic_params.is_empty()
+                        && let Some(MirDataType::Function {
+                            return_type,
+                            parameters,
+                        }) = env
+                            .symbols
+                            .variables
+                            .get(&symbol_name)
+                            .map(|var| var.data_type.clone())
+                    {
+                        let mut arg_types = vec![data_type.clone()];
+                        arg_types.extend(self.args.iter().filter_map(|arg| match arg {
+                            CallArg::Value(node) => node.type_of(env, scope, span),
+                            CallArg::Named(_, _) => None,
+                        }));
+
+                        if let Ok(inferred) = env.infer_concrete_type_args(
+                            scope,
+                            &generic_params,
+                            &parameters,
+                            &return_type,
+                            &arg_types,
+                            None,
+                        ) {
+                            let subst = generic_params
+                                .iter()
+                                .zip(inferred.iter())
+                                .map(|(param, inferred)| {
+                                    (
+                                        param.to_string(),
+                                        bindings
+                                            .get(param.as_str())
+                                            .cloned()
+                                            .unwrap_or_else(|| inferred.clone()),
+                                    )
+                                })
+                                .collect();
+
+                            return Some(return_type.substitute(&subst));
+                        }
+                    }
+                }
+
+                if let Some(data_type) = env.resolve_member_fn_type(data_type, &member_name) {
+                    return data_type.apply_callable();
                 }
 
                 return Some(MirDataType::Dynamic);

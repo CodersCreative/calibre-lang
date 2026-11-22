@@ -211,22 +211,29 @@ impl MiddleEnvironment {
         }
 
         if let Some(expected) = expected_return {
-            self.unify_types(scope, return_type, expected, generic_params, &mut subst)?;
+            let mut expected_subst = subst.clone();
+
+            if self
+                .unify_types(
+                    scope,
+                    return_type,
+                    expected,
+                    generic_params,
+                    &mut expected_subst,
+                )
+                .is_ok()
+            {
+                subst = expected_subst;
+            }
         }
 
         Ok(generic_params
             .iter()
             .map(|param| {
-                if let Some(ty) = subst.get(param.as_str()) {
-                    ty.clone()
-                } else {
-                    MirDataType::Struct {
-                        identifier: TypeKey {
-                            fully_qualified_path: FullyQualifiedPath::combine(None, *param),
-                        },
-                        generic_types: Vec::new(),
-                    }
-                }
+                subst
+                    .get(param.as_str())
+                    .cloned()
+                    .unwrap_or(MirDataType::Dynamic)
             })
             .collect())
     }
