@@ -81,6 +81,7 @@ pub extern "C" fn calibre_env_vars() -> *mut GcList {
                     GcAggregate {
                         field_count: 2,
                         data: vec![Value::String(key), Value::String(value)],
+                        field_names: Vec::new(),
                     }
                     .alloc(),
                 )

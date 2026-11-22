@@ -1,6 +1,5 @@
 use crate::{
-    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr},
-    values::{
+    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, gc_header_at}, values::{
         aggregate::GcAggregate,
         enums::{calibre_option_some, calibre_result_err, calibre_result_ok},
         host::GcHost,
@@ -46,6 +45,8 @@ fn register_alloc(inner: GcObject) -> *mut GcHeader {
     let header = Box::into_raw(Box::new(GcHeader {
         inner,
         marked: false,
+        type_name: std::ptr::null_mut(),
+        type_tag: None,
     }));
 
     if let Ok(mut heap) = GC_HEAP.lock() {
@@ -122,6 +123,52 @@ pub extern "C" fn calibre_is_host(val: *mut Value) -> bool {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn calibre_gc_set_name(ptr: i64, name: *mut GcString, tag: ValueTag) -> i64 {
+    if let Some(header) = gc_header_at(ptr as usize) {
+        unsafe {
+            (*header).type_name = name;
+            (*header).type_tag = Some(tag);
+        }
+    }
+
+    ptr
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_dyn_unbox(payload: i64) -> i64 {
+    dyn_box_inner(payload.cast_unsigned() as usize).map_or(payload, |value| i64::from(value))
+}
+
+pub(crate) fn dyn_box_inner(payload: usize) -> Option<Value> {
+    let header = gc_header_at(payload)?;
+
+    if !unsafe { (*header).type_tag }.as_ref().is_some_and(|x| x == &ValueTag::Dynamic) {
+        return None;
+    }
+
+    if let GcObject::Aggregate(agg) = unsafe { &(*header).inner } {
+        return agg.data.first().cloned();
+    }
+
+    None
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_is_type(payload: i64, name: *mut string::GcString) -> bool {
+    if name.is_null() {
+        return false;
+    }
+
+    let target = unsafe { &*name }.data.as_str();
+
+    if let Some(inner) = dyn_box_inner(payload as usize) {
+        return inner.type_name().is_some_and(|x| x == target);
+    }
+
+    GcHeader::type_name(payload as usize).is_some_and(|x| x == target)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn calibre_set_ref(val: *mut Value, tag: ValueTag, payload: i64) -> i64 {
     if val.is_null() {
         return payload;
@@ -152,6 +199,7 @@ pub enum Value {
     Host(*mut GcHost),
     Func(i64),
     Reader(*mut GcReader),
+    Dynamic(usize),
     Ptr(usize),
 }
 
@@ -177,12 +225,56 @@ impl From<&Value> for ValueTag {
             Value::Host(_) => Self::Host,
             Value::Reader(_) => Self::Reader,
             Value::Func(_) => Self::Func,
+            Value::Dynamic(_) => Self::Dynamic,
             Value::Ptr(_) => Self::Ptr,
         }
     }
 }
 
 impl Value {
+    pub fn unbox_dyn(self) -> Self {
+        if let Value::Ptr(p) = self
+            && let Some(inner) = dyn_box_inner(p)
+        {
+            return inner;
+        }
+
+        self
+    }
+
+
+    fn type_name(&self) -> Option<String> {
+        Some(match self {
+            Value::Null => "null".to_string(),
+            Value::Bool(_) => "bool".to_string(),
+            Value::Int(_) => "int".to_string(),
+            Value::UInt(_) => "uint".to_string(),
+            Value::Byte(_) => "byte".to_string(),
+            Value::Float(_) => "float".to_string(),
+            Value::Big(_) => "big".to_string(),
+            Value::String(_) => "str".to_string(),
+            Value::Char(_) => "char".to_string(),
+            Value::Range(_, _) => "range".to_string(),
+            Value::Struct(p)
+            | Value::Tuple(p)
+            | Value::Enum(p)
+            | Value::Result(p)
+            | Value::Option(p) => GcHeader::type_name(*p as usize)?,
+            Value::List(p) => GcHeader::type_name(*p as usize)?,
+            Value::Host(p) => GcHeader::type_name(*p as usize)?,
+            Value::Reader(p) => GcHeader::type_name(*p as usize).unwrap_or_else(|| "reader".to_string()),
+            Value::Func(_) => "fn".to_string(),
+            Value::Dynamic(p) => {
+                if let Some(inner) = dyn_box_inner(*p) {
+                    return inner.type_name();
+                }
+
+                return None;
+            }
+            Value::Ptr(_) => "ptr".to_string()
+        })
+    }
+
     pub fn from_tag(tag: ValueTag, value: i64) -> Self {
         match tag {
             ValueTag::Null => Self::Null,
@@ -208,7 +300,16 @@ impl Value {
             ValueTag::Host => Self::Host(value.cast_unsigned() as *mut GcHost),
             ValueTag::Reader => Self::Reader(value.cast_unsigned() as *mut GcReader),
             ValueTag::Func => Self::Func(value),
-            ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
+            ValueTag::Dynamic => {
+                if let Some(tag) = ValueTag::from_dyn(value.cast_unsigned() as usize) {
+                    return Self::from_tag(tag, value);
+                }
+
+                Self::Dynamic(value.cast_unsigned() as usize)
+            }
+            ValueTag::Ptr =>  {
+                Self::Ptr(value.cast_unsigned() as usize)
+            }
         }
     }
 
@@ -253,6 +354,7 @@ impl From<Value> for i64 {
             Value::Float(x) => x.to_bits() as i64,
             Value::Big(x) => x as i64,
             Value::Ptr(x) => x as i64,
+            Value::Dynamic(x) => x as i64,
             Value::String(x) => x as i64,
             Value::Char(x) => x as i64,
             Value::Struct(x) => x as i64,
@@ -290,7 +392,7 @@ impl Display for Value {
                     write!(f, "{}", flt)
                 }
             }
-            Value::Ptr(x) => write!(f, "0x{:x}", x),
+            Value::Ptr(x) | Value::Dynamic(x) => write!(f, "0x{:x}", x),
             Value::String(s) => {
                 if s.is_null() {
                     write!(f, "null")
@@ -434,7 +536,7 @@ impl Display for Value {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValueTag {
     Null,
     Bool,
@@ -455,5 +557,13 @@ pub enum ValueTag {
     Host,
     Reader,
     Func,
+    Dynamic,
     Ptr,
+}
+
+impl ValueTag {
+    pub fn from_dyn(addr: usize) -> Option<ValueTag> {
+        let header = gc_header_at(addr)?;
+        unsafe { (*header).type_tag }
+    }
 }

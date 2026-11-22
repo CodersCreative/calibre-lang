@@ -1,4 +1,5 @@
-use crate::values::{GcObject, Value};
+use crate::values::ValueTag;
+use crate::values::{GcObject, Value, string::GcString};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use wasm_sync::Mutex;
@@ -6,6 +7,8 @@ use wasm_sync::Mutex;
 pub struct GcHeader {
     pub inner: GcObject,
     pub marked: bool,
+    pub type_name: *mut GcString,
+    pub type_tag: Option<ValueTag>,
 }
 
 impl GcHeader {
@@ -15,6 +18,27 @@ impl GcHeader {
         }
 
         Some(unsafe { &(*header).inner })
+    }
+
+    pub(crate) fn type_name(payload: usize) -> Option<String> {
+        if payload == 0 {
+            return None;
+        }
+
+        let header = gc_header_at(payload as usize)?;
+
+        unsafe {
+            if let Some(name) = (*header).type_name.as_ref() {
+                return Some((*name).data.clone());
+            }
+
+            match &(*header).inner {
+                GcObject::String(_) => Some("str".to_string()),
+                GcObject::Host(_) => Some("host".to_string()),
+                GcObject::Big(_) => Some("big".to_string()),
+                _ => None,
+            }
+        }
     }
 }
 

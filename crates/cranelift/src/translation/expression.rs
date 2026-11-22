@@ -470,8 +470,20 @@ impl CraneliftTranslation for LirIs {
         translator: &mut FunctionTranslator<'a, M>,
         _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        // TODO Handle dynamics this only works for compile time known types right now
-        let value = self.value.translate(translator, None)?;
+        let mut value = self.value.translate(translator, None)?;
+
+        if value.data_type.unwrap_all_refs().is_dyn() {
+            if matches!(value.data_type, MirDataType::Ref(_, _)) {
+                value.value = translator.runtime_call("calibre_deref", &[value.value])?;
+            }
+
+            let descriptor = LirLiteral::String(Ustr::from(self.data_type.descriptor().as_str()))
+                .translate(translator, Some(MirDataType::Str))?;
+
+            let value = translator.runtime_call("calibre_is_type", &[value.value, descriptor.value])?;
+
+            return Ok(CompiledValue::new(value, MirDataType::Bool));
+        }
 
         // TODO Remove just temporary to get generators working
         if self.data_type.is_host() {

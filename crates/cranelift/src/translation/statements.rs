@@ -37,6 +37,12 @@ impl CraneliftTranslation for LirDeclare {
             return Ok(CompiledValue::new(value, self.data_type.clone()));
         }
 
+        let value = if self.data_type.is_dyn() {
+            translator.coerce_to_dyn(value)?
+        } else {
+            value
+        };
+
         let ty = translator.types.to_cranelift_type(&self.data_type);
         let var = translator.builder.declare_var(ty);
 
@@ -110,6 +116,12 @@ impl CraneliftTranslation for LirAssign {
                         return Ok(CompiledValue::new(payload, data_type));
                     }
 
+                    let value = if data_type.is_dyn() {
+                        translator.coerce_to_dyn(value)?
+                    } else {
+                        value
+                    };
+
                     translator.builder.def_var(var, value.value);
                     Ok(value)
                 } else if let Some((data_type, data_id)) = translator.globals.get(&key).cloned() {
@@ -159,10 +171,12 @@ impl CraneliftTranslation for LirAssign {
                     .module
                     .declare_func_in_func(*func_id, translator.builder.func);
 
+                let payload = translator.convert_to_i64(value)?;
+
                 let call = translator
                     .builder
                     .ins()
-                    .call(func_ref, &[ptr.value, tag, value.value]);
+                    .call(func_ref, &[ptr.value, tag, payload]);
                 let result = translator.builder.inst_results(call)[0];
 
                 Ok(CompiledValue::new(result, data_type))

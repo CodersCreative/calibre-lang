@@ -2,7 +2,7 @@ use crate::natives::{Natives, build_native_mapping};
 use crate::values::{CompiledValue, CraneliftTypes};
 use crate::{Functions, Globals, RuntimeFunctions};
 use calibre_lir::MirDataType;
-use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
+use calibre_lir::ast::{BlockId, LirLiteral, LirNodeType, LirTerminator};
 use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::ast::nodes::VarType;
@@ -11,6 +11,7 @@ use cranelift::codegen::isa::TargetIsa;
 use cranelift::prelude::*;
 use cranelift_module::{FuncId, Module};
 use rustc_hash::{FxHashMap, FxHashSet};
+use ustr::Ustr;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -178,24 +179,62 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         Ok(())
     }
 
+    pub(crate) fn set_type_for_ptr(
+        &mut self,
+        ptr: Value,
+        data_type: &MirDataType,
+    ) -> Result<(), Box<dyn Error>> {
+        let name = Ustr::from(data_type.clone().descriptor().as_str());
+        let name = LirLiteral::String(name).translate(self, Some(MirDataType::Str))?;
+
+        let tag = self.int_const(data_type.type_tag(self.registry.enums()) as i64);
+        self.runtime_call_void("calibre_gc_set_name", &[ptr, name.value, tag])
+    }
+
+    pub(crate) fn coerce_to_dyn(
+        &mut self,
+        value: CompiledValue,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        if value.data_type.is_dyn() {
+            return Ok(value);
+        }
+
+        if let Some(value) = self.box_dyn_if_scalar(&MirDataType::Dynamic, &value)? {
+            return Ok(CompiledValue::new(value, MirDataType::Dynamic));
+        }
+
+        let payload = self.convert_to_i64(value)?;
+        Ok(CompiledValue::new(payload, MirDataType::Dynamic))
+    }
+
+    pub(crate) fn box_dyn_if_scalar(
+        &mut self,
+        target: &MirDataType,
+        value: &CompiledValue,
+    ) -> Result<Option<Value>, Box<dyn Error>> {
+        if value.data_type.is_boxed() || !target.is_dyn() || value.data_type.is_dyn() {
+            return Ok(None);
+        }
+
+        let tag = self.int_const(value.data_type.type_tag(self.registry.enums()) as i64);
+        let payload = self.convert_to_i64(value.clone())?;
+
+        Ok(Some(self.runtime_call("calibre_dyn_box", &[tag, payload])?))
+    }
+
     pub(crate) fn box_value(
         &mut self,
         data_type: &MirDataType,
         value: CompiledValue,
     ) -> Result<Value, Box<dyn Error>> {
+        let value = if let Some(value) = self.box_dyn_if_scalar(data_type, &value)? {
+            value
+        } else {
+            self.convert_to_i64(value)?
+        };
+
         let tag = self.int_const(data_type.type_tag(self.registry.enums()) as i64);
-        let payload = self.convert_to_i64(value)?;
-
-        self.runtime_call("calibre_value_cell_new", &[tag, payload])
-    }
-
-    pub(crate) fn _load_boxed(
-        &mut self,
-        cell: Value,
-        data_type: &MirDataType,
-    ) -> Result<Value, Box<dyn Error>> {
-        let payload = self.runtime_call("calibre_deref", &[cell])?;
-        Ok(self.convert_from_i64(payload, data_type))
+        self.runtime_call("calibre_value_cell_new", &[tag, value])
     }
 
     pub(crate) fn store_boxed(
@@ -203,8 +242,13 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         boxed: CompiledValue,
         value: CompiledValue,
     ) -> Result<(), Box<dyn Error>> {
+        let value = if let Some(value) = self.box_dyn_if_scalar(&boxed.data_type, &value)? {
+            value
+        } else {
+            self.convert_to_i64(value)?
+        };
+
         let tag = self.int_const(boxed.data_type.type_tag(self.registry.enums()) as i64);
-        let payload = self.convert_to_i64(value)?;
 
         let func_id = *self
             .runtime_functions
@@ -215,7 +259,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
 
         self.builder
             .ins()
-            .call(func_ref, &[boxed.value, tag, payload]);
+            .call(func_ref, &[boxed.value, tag, value]);
 
         Ok(())
     }

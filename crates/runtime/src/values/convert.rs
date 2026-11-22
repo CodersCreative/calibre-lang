@@ -423,7 +423,7 @@ pub extern "C" fn calibre_as(
     descriptor: *mut GcString,
     failure_mode: i64,
 ) -> i64 {
-    let value = Value::from_tag(tag, payload);
+    let value = Value::from_tag(tag, payload).unbox_dyn();
 
     let descriptor = if descriptor.is_null() {
         "unsupported".to_string()

@@ -5,7 +5,8 @@ use crate::{
 use calibre_lir::{
     MirDataType,
     ast::{
-        LirDeref, LirDiscriminant, LirIndex, LirLoad, LirMember, LirNodeType, LirRef, LirRefLoad,
+        LirDeref, LirDiscriminant, LirIndex, LirLiteral, LirLoad, LirMember, LirNodeType, LirRef,
+        LirRefLoad,
     },
     environment::LirType,
 };
@@ -14,6 +15,7 @@ use calibre_parser::ast::RefMutability;
 use cranelift::codegen::ir::{InstBuilder, MachMemFlags};
 use cranelift_module::Module;
 use std::error::Error;
+use ustr::Ustr;
 
 impl CraneliftTranslation for LirMember {
     fn translate<'a, M: Module>(
@@ -24,6 +26,21 @@ impl CraneliftTranslation for LirMember {
         let base = self.base.translate(translator, None)?;
         let member = self.field.as_str();
         let mut index = 0;
+
+        if base.data_type.unwrap_all_refs().is_dyn() {
+            let mut value = base.value;
+
+            if matches!(base.data_type, MirDataType::Ref(_, _)) {
+                value = translator.runtime_call("calibre_deref", &[value])?;
+            }
+
+            let name = LirLiteral::String(Ustr::from(member))
+                .translate(translator, Some(MirDataType::Str))?;
+
+            let result = translator.runtime_call("calibre_dyn_field", &[value, name.value])?;
+
+            return Ok(CompiledValue::new(result, MirDataType::Dynamic));
+        }
 
         let is_enum = match base.data_type.unwrap_all_refs() {
             MirDataType::Struct {
@@ -321,11 +338,27 @@ impl CraneliftTranslation for LirRef {
             ));
         }
 
-        // TODO Get a pointer
-        let value = self
-            .value
-            .translate(translator, data_type.map(|x| x.unwrap_all_refs().clone()))?;
-        Ok(value)
+        let value = self.value.translate(
+            translator,
+            data_type.clone().map(|x| x.unwrap_all_refs().clone()),
+        )?;
+
+        if matches!(value.data_type.unwrap_all_refs(), MirDataType::Ref(_, _)) {
+            return Ok(value);
+        }
+
+        let mutability = match &data_type {
+            Some(MirDataType::Ref(_, m)) => *m,
+            _ => RefMutability::MutRef,
+        };
+
+        let data_type = value.data_type.unwrap_all_refs().clone();
+        let value = translator.box_value(&data_type, value)?;
+
+        Ok(CompiledValue::new(
+            value,
+            MirDataType::Ref(Box::new(data_type), mutability),
+        ))
     }
 }
 
@@ -415,6 +448,13 @@ impl CraneliftTranslation for LirDeref {
             let result = translator.builder.inst_results(call)[0];
 
             let data_type = ptr.data_type.unwrap_all_refs().clone();
+            
+            let result = if data_type.is_dyn() {
+                result
+            } else {
+                translator.runtime_call("calibre_dyn_unbox", &[result])?
+            };
+
             let result = translator.convert_from_i64(result, &data_type);
 
             Ok(CompiledValue::new(result, data_type))

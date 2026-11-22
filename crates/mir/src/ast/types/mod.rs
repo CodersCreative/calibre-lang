@@ -465,6 +465,10 @@ impl MirDataType {
         }
     }
 
+    pub fn is_boxed(&self) -> bool {
+        !matches!(self, Self::FfiType(_) | Self::Bool | Self::Byte | Self::Char | Self::Float | Self::Int | Self::Null | Self::Range | Self::UInt)
+    }
+
     pub fn replace_dyn_from(&self, ty: &MirDataType) -> MirDataType {
         match ty {
             MirDataType::Dynamic => self.clone(),
@@ -603,6 +607,7 @@ impl MirDataType {
             MirDataType::Range => "range".to_string(),
             MirDataType::Dynamic => "dyn".to_string(),
             MirDataType::Host => "host".to_string(),
+            MirDataType::Struct { identifier, .. } => identifier.name().to_string(),
             MirDataType::List(inner) => format!("(list {})", inner.descriptor()),
             MirDataType::Option(inner) => format!("(option {})", inner.descriptor()),
             MirDataType::Result { ok, err } => {
@@ -674,7 +679,8 @@ impl MirDataType {
             MirDataType::Range => 15,
             MirDataType::Host => 16,
             MirDataType::Function { .. } => 18,
-            _ => 19,
+            MirDataType::Dynamic => 19,
+            _ => 20,
         }
     }
 

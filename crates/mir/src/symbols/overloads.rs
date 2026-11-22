@@ -143,31 +143,20 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if x.parameters[0].matches(
-                    &left_ty,
-                    &x.generic_params
-                        .iter()
-                        .map(|x| x.as_str())
-                        .collect::<Vec<_>>(),
-                ) && let Some(t) = x.return_type.unwrap_one_result()
-                {
-                    t.matches(
-                        target,
-                        &x.generic_params
-                            .iter()
-                            .map(|x| x.as_str())
-                            .collect::<Vec<_>>(),
-                    )
-                } else if x.return_type.is_gen() {
-                    x.return_type.matches(
-                        target,
-                        &x.generic_params
-                            .iter()
-                            .map(|x| x.as_str())
-                            .collect::<Vec<_>>(),
-                    )
+                let generic_names = x
+                    .generic_params
+                    .iter()
+                    .map(|x| x.as_str())
+                    .collect::<Vec<_>>();
+
+                if !x.parameters[0].matches(&left_ty, &generic_names) {
+                    return false;
+                }
+
+                if let Some(t) = x.return_type.unwrap_one_result() {
+                    t.matches(target, &generic_names)
                 } else {
-                    false
+                    x.return_type.is_gen() && x.return_type.matches(target, &generic_names)
                 }
             })
             .cloned();

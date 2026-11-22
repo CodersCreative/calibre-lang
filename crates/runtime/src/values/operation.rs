@@ -41,8 +41,8 @@ pub extern "C" fn calibre_comparison(
     right_tag: ValueTag,
     right: i64,
 ) -> bool {
-    let left = Value::from_tag(left_tag, left);
-    let right = Value::from_tag(right_tag, right);
+    let left = Value::from_tag(left_tag, left).unbox_dyn();
+    let right = Value::from_tag(right_tag, right).unbox_dyn();
 
     if let Ok(Value::Bool(x)) = comparison(&op, left, right) {
         x
@@ -59,8 +59,8 @@ pub extern "C" fn calibre_binary(
     right_tag: ValueTag,
     right: i64,
 ) -> i64 {
-    let left = Value::from_tag(left_tag, left);
-    let right = Value::from_tag(right_tag, right);
+    let left = Value::from_tag(left_tag, left).unbox_dyn();
+    let right = Value::from_tag(right_tag, right).unbox_dyn();
 
     match binary(&op, left, right) {
         Ok(x) => i64::from(x),

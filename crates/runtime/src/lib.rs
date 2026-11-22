@@ -34,6 +34,30 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: values::calibre_deref as *const u8,
         },
         RuntimeSymbol {
+            name: "calibre_gc_set_name",
+            ptr: values::calibre_gc_set_name as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_is_type",
+            ptr: values::calibre_is_type as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_dyn_field",
+            ptr: aggregate::calibre_dyn_field as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_dyn_box",
+            ptr: aggregate::calibre_dyn_box as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_dyn_unbox",
+            ptr: values::calibre_dyn_unbox as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_aggregate_set_field_name",
+            ptr: aggregate::calibre_aggregate_set_field_name as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_set_ref",
             ptr: values::calibre_set_ref as *const u8,
         },

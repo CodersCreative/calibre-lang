@@ -50,7 +50,7 @@ impl Hash for Value {
             Value::String(v) => unsafe { &**v }.data.hash(state),
             Value::Float(v) => v.to_bits().hash(state),
             Value::Big(v) => unsafe { &**v }.to_string().hash(state),
-            Value::Ptr(v) => v.hash(state),
+            Value::Ptr(v) | Value::Dynamic(v) => v.hash(state),
             Value::Range(a, b) => {
                 a.hash(state);
                 b.hash(state);
