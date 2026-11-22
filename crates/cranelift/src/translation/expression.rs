@@ -472,6 +472,22 @@ impl CraneliftTranslation for LirIs {
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Handle dynamics this only works for compile time known types right now
         let value = self.value.translate(translator, None)?;
+
+        // TODO Remove just temporary to get generators working
+        if self.data_type.is_host() {
+            let result = match value.data_type {
+                MirDataType::Ref(_, _) => {
+                    translator.runtime_call("calibre_is_host", &[value.value])?
+                }
+                t if t.unwrap_all_refs().is_host() => {
+                    translator.builder.ins().iconst(types::I64, 1)
+                }
+                _ => translator.builder.ins().iconst(types::I64, 0),
+            };
+
+            return Ok(CompiledValue::new(result, MirDataType::Bool));
+        }
+
         let value = translator.builder.ins().iconst(
             translator.types.bool(),
             if value.data_type.loose_eq(&self.data_type) {

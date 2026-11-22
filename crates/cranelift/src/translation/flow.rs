@@ -38,6 +38,10 @@ impl CraneliftTranslation for LirClosure {
         for (i, capture) in self.captures.iter().enumerate() {
             if translator.natives.contains_key(&capture.name)
                 || translator.globals.contains_key(&capture.name)
+                || translator
+                    .registry
+                    .natives
+                    .contains_key(&capture.name.name())
             {
                 let tag = translator
                     .int_const(MirDataType::Null.type_tag(translator.registry.enums()) as i64);

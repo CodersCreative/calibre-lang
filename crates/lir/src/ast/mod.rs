@@ -10,7 +10,7 @@ use calibre_parser::{
     },
 };
 use derive_builder::Builder;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ustr::Ustr;
@@ -343,6 +343,61 @@ impl LirNodeType {
             data_type,
             is_referenced: true,
         })
+    }
+
+    pub fn get_yield_type(&self, vars: &FxHashMap<VariableKey, MirDataType>) -> MirDataType {
+        match self {
+            LirNodeType::Literal(LirLiteral::Null) => MirDataType::Null,
+            LirNodeType::Literal(LirLiteral::Bool(_)) => MirDataType::Bool,
+            LirNodeType::Literal(LirLiteral::Int(_)) => MirDataType::Int,
+            LirNodeType::Literal(LirLiteral::UInt(_)) => MirDataType::UInt,
+            LirNodeType::Literal(LirLiteral::Byte(_)) => MirDataType::Byte,
+            LirNodeType::Literal(LirLiteral::Float(_)) => MirDataType::Float,
+            LirNodeType::Literal(LirLiteral::Char(_)) => MirDataType::Char,
+            LirNodeType::Literal(LirLiteral::Big(_)) => MirDataType::Big,
+            LirNodeType::Literal(LirLiteral::String(_)) => MirDataType::Str,
+            LirNodeType::Load(LirLoad { value })
+            | LirNodeType::Move(LirMove { value })
+            | LirNodeType::RefLoad(LirRefLoad { value }) => {
+                vars.get(value).cloned().unwrap_or(MirDataType::Dynamic)
+            }
+            LirNodeType::Clone(c) => c.value.get_yield_type(vars),
+            LirNodeType::Discriminant(_) => MirDataType::UInt,
+            LirNodeType::Comparison(_) | LirNodeType::Is(_) => MirDataType::Bool,
+            LirNodeType::As(a) => a.data_type.clone(),
+            LirNodeType::Binary(b) => {
+                let left = b.left.get_yield_type(vars);
+                let right = b.right.get_yield_type(vars);
+
+                if left == MirDataType::Float || right == MirDataType::Float {
+                    MirDataType::Float
+                } else if left == right && !left.is_dyn() {
+                    left
+                } else {
+                    MirDataType::Dynamic
+                }
+            }
+            LirNodeType::Call(c) => c.return_type.clone().unwrap_or(MirDataType::Dynamic),
+            LirNodeType::List(l) => MirDataType::List(Box::new(l.data_type.clone())),
+            LirNodeType::Aggregate(a) => a
+                .name
+                .clone()
+                .map(|identifier| MirDataType::Struct {
+                    identifier,
+                    generic_types: Vec::new(),
+                })
+                .unwrap_or(MirDataType::Dynamic),
+            LirNodeType::Enum(e) => e
+                .name
+                .clone()
+                .map(|identifier| MirDataType::Struct {
+                    identifier,
+                    generic_types: Vec::new(),
+                })
+                .unwrap_or(MirDataType::Dynamic),
+            LirNodeType::Range(_) => MirDataType::Range,
+            _ => MirDataType::Dynamic,
+        }
     }
 
     pub fn collect_aggregates(&self, out: &mut Vec<LirAggregate>) {

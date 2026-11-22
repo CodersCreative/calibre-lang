@@ -384,11 +384,22 @@ impl CraneliftTranslation for LirDeref {
         translator: &mut FunctionTranslator<'a, M>,
         data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        let ptr = self
-            .value
-            .translate(translator, data_type.map(|x| x.unwrap_all_refs().clone()))?;
+        let ptr = self.value.translate(
+            translator,
+            data_type.clone().map(|x| x.unwrap_all_refs().clone()),
+        )?;
 
         if matches!(&ptr.data_type, MirDataType::Ref(_, _)) {
+            if data_type
+                .as_ref()
+                .is_some_and(|x| matches!(x, MirDataType::Ref(_, _)))
+            {
+                return Ok(CompiledValue::new(
+                    ptr.value,
+                    data_type.unwrap_or(ptr.data_type),
+                ));
+            }
+
             let runtime_name = "calibre_deref";
 
             let func_id = translator

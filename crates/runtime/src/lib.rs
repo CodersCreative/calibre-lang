@@ -138,6 +138,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_ffi_call",
             ptr: values::ffi::calibre_ffi_call as *const u8,
         },
+        RuntimeSymbol {
+            name: "calibre_is_host",
+            ptr: values::calibre_is_host as *const u8,
+        },
         // closure
         RuntimeSymbol {
             name: "calibre_fn_closure_new",

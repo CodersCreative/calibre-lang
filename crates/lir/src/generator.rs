@@ -7,7 +7,7 @@ use crate::{
 };
 use calibre_mir::{
     ast::types::MirDataType,
-    symbols::{TypeKey, VariableKey},
+    symbols::{TypeKey, VariableKey, resolve::Key},
 };
 use calibre_parser::ast::{ObjectMap, RefMutability, comparison::ComparisonOperator};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -179,7 +179,23 @@ impl Context {
         }
 
         let param_key = func.params[0].identifier.clone();
-        let return_type = func.return_type.clone();
+        let mut var_types = FxHashMap::default();
+
+        for param in &func.params {
+            var_types.insert(param.identifier.clone(), param.data_type.clone());
+        }
+
+        for capture in &func.captures {
+            var_types.insert(capture.name.clone(), capture.data_type.clone());
+        }
+
+        for block in func.blocks.iter().flatten() {
+            for instr in &block.instructions {
+                if let LirNodeType::Declare(decl) = &instr.node_type {
+                    var_types.insert(decl.dest.clone(), decl.data_type.clone());
+                }
+            }
+        }
 
         let old_blocks: Vec<LirBlock> = func.blocks.iter().flatten().cloned().collect();
         if old_blocks.is_empty() {
@@ -204,6 +220,16 @@ impl Context {
             return None;
         }
 
+        let mut excluded: FxHashSet<VariableKey> = func
+            .params
+            .iter()
+            .map(|x| x.identifier.clone())
+            .chain(func.captures.iter().map(|x| x.name.clone()))
+            .collect();
+
+        excluded.insert(self.suspend.clone());
+        excluded.extend(yields.iter().map(|(_, key, _)| key.clone()));
+
         let resume_of: Vec<usize> = yields
             .iter()
             .map(|(index, _, _)| {
@@ -215,17 +241,6 @@ impl Context {
                 index
             })
             .collect();
-
-        let mut excluded: FxHashSet<VariableKey> = func
-            .params
-            .iter()
-            .map(|x| x.identifier.clone())
-            .chain(func.captures.iter().map(|x| x.name.clone()))
-            .collect();
-
-        excluded.insert(self.suspend.clone());
-        excluded.insert(self.some.clone());
-        excluded.insert(self.none.clone());
 
         let segments_len = segments.len();
         let mut use_def: Vec<(FxHashSet<VariableKey>, FxHashSet<VariableKey>)> =
@@ -319,6 +334,14 @@ impl Context {
             let head = &mut segments[*head_index];
             let resume_index = resume_of[index];
 
+            head.instructions.insert(
+                0,
+                LirNode::new(
+                    Default::default(),
+                    LirNodeType::declare(key.clone(), LirNodeType::null(), MirDataType::Dynamic),
+                ),
+            );
+
             for key in live_in[resume_index]
                 .iter()
                 .filter(|v| field_of.contains_key(*v))
@@ -338,10 +361,11 @@ impl Context {
             }
 
             let node_key = self.temp_key("gen_yield_value");
+            let yield_type = node.get_yield_type(&var_types);
 
             head.instructions.push(LirNode::new(
                 Default::default(),
-                LirNodeType::declare(node_key.clone(), node.clone(), MirDataType::Dynamic),
+                LirNodeType::declare(node_key.clone(), node.clone(), yield_type),
             ));
 
             head.instructions.push(LirNode::new(
@@ -369,7 +393,7 @@ impl Context {
                     caller: Box::new(LirNodeType::load(self.some.clone())),
                     args: Box::new([LirNodeType::load(node_key)]),
                     returns_value: true,
-                    return_type: Some(return_type.clone()),
+                    return_type: None,
                 })),
             });
 
@@ -379,7 +403,7 @@ impl Context {
 
             let restore_set: Vec<VariableKey> = live_in[resume_index]
                 .iter()
-                .filter(|v| field_of.contains_key(*v))
+                .filter(|v| field_of.contains_key(*v) && *v != key)
                 .cloned()
                 .collect();
 
@@ -485,6 +509,36 @@ impl Context {
 
         func.blocks = blocks.into_iter().map(Some).collect();
 
+        if !func.return_type.is_null() && func.return_type != MirDataType::Never {
+            for block in func.blocks.iter_mut().flatten() {
+                let Some(LirTerminator::Return { value, .. }) = &mut block.terminator else {
+                    continue;
+                };
+
+                if value.is_some() {
+                    continue;
+                }
+
+                let should_fold = block
+                    .instructions
+                    .last()
+                    .is_some_and(|last| last.node_type.is_return_candidate());
+
+                if should_fold {
+                    let node = block.instructions.pop()?.node_type;
+                    *value = Some(node);
+                }
+            }
+        }
+
+        for block in func.blocks.iter_mut().flatten() {
+            for instr in block.instructions.iter_mut() {
+                if let LirNodeType::Declare(decl) = &mut instr.node_type {
+                    decl.is_referenced = false;
+                }
+            }
+        }
+
         if let Some(p) = func.params.first_mut() {
             p.data_type = MirDataType::Ref(Box::new(state_mir_ty), RefMutability::MutRef);
         }
@@ -565,10 +619,20 @@ impl Segment {
 
 impl LirRegistry {
     pub fn lower_generators(&mut self) {
+        let resolve_native = |name: &str| {
+            self.natives
+                .get(&Ustr::from(name))
+                .and_then(|key| match key {
+                    Key::VariableKey(var_key) => Some(var_key.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| VariableKey::from(name))
+        };
+
         let mut ctx = Context {
-            suspend: VariableKey::from("gen_suspend"),
-            some: VariableKey::from("some"),
-            none: VariableKey::from("none"),
+            suspend: resolve_native("gen_suspend"),
+            some: resolve_native("some"),
+            none: resolve_native("none"),
             counter: 0,
         };
 

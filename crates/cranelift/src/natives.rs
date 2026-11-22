@@ -136,6 +136,14 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_is_host",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
                 "calibre_fn_entry",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],

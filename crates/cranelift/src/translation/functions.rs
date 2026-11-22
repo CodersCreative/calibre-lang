@@ -23,7 +23,13 @@ impl CraneliftTranslation for LirCall {
         };
 
         let Some(key) = key else {
-            let callee = self.caller.translate(translator, None)?;
+            let mut callee = self.caller.translate(translator, None)?;
+
+            while let MirDataType::Ref(inner, _) = callee.data_type.clone() {
+                let payload = translator.runtime_call("calibre_deref", &[callee.value])?;
+                callee = CompiledValue::new(payload, *inner);
+            }
+
             let mut arg_types = Vec::new();
 
             match callee.data_type.unwrap_all_refs().clone() {

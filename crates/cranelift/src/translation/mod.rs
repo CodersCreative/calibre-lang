@@ -237,10 +237,14 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         self.mutable_captures = self
             .registry
             .functions
-            .values()
-            .flat_map(|f| f.captures.iter())
-            .filter(|c| c.mutable)
-            .map(|c| c.name.clone())
+            .iter()
+            .flat_map(|(func_name, f)| {
+                f.captures
+                    .iter()
+                    .map(move |c| (func_name.clone(), c.clone()))
+            })
+            .filter(|(_, c)| c.mutable)
+            .map(|(_, c)| c.name.clone())
             .filter(|name| local_names.contains(name))
             .collect();
 
@@ -305,6 +309,9 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             let cl_ty = self.types.to_cranelift_type(&param.data_type);
             let var = self.builder.declare_var(cl_ty);
 
+            let needs_box = function.captured_params & (1 << i) != 0
+                || (param.var_type == VarType::Mutable && !param.data_type.is_ref());
+
             if let Some(&value) = block_params.get(i + param_offset) {
                 let value = CompiledValue::new(value, param.data_type.clone());
 
@@ -353,7 +360,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                         value.value
                     };
 
-                if function.captured_params & (1 << i) != 0 {
+                if needs_box {
                     let value = self.box_value(
                         &param.data_type,
                         CompiledValue::new(value, param.data_type.clone()),
@@ -368,7 +375,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 }
             }
 
-            if function.captured_params & (1 << i) == 0 {
+            if needs_box {
                 self.variables
                     .insert(param.identifier.clone(), (param.data_type.clone(), var));
             }
@@ -437,6 +444,40 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                         .insert(capture.name.clone(), (data_type.clone(), var));
                 }
             }
+        }
+
+        let mut boxed_locals = function
+            .blocks
+            .iter()
+            .flatten()
+            .flat_map(|block| block.instructions.iter())
+            .filter_map(|node| match &node.node_type {
+                LirNodeType::Declare(decl)
+                    if (decl.is_referenced || self.mutable_captures.contains(&decl.dest))
+                        && !self.boxed_vars.contains_key(&decl.dest)
+                        && !self.variables.contains_key(&decl.dest)
+                        && !self.globals.contains_key(&decl.dest)
+                        && !self.functions.contains_key(&decl.dest)
+                        && !self.natives.contains_key(&decl.dest) =>
+                {
+                    Some((decl.dest.clone(), decl.data_type.clone()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        let mut seen = FxHashSet::default();
+        boxed_locals.retain(|(name, _)| seen.insert(name.clone()));
+
+        for (name, data_type) in boxed_locals {
+            let zero = self.int_const(0);
+            let cell = self.box_value(
+                &MirDataType::Null,
+                CompiledValue::new(zero, MirDataType::Null),
+            )?;
+
+            self.boxed_vars
+                .insert(name, CompiledValue::new(cell, data_type));
         }
 
         if function.memo

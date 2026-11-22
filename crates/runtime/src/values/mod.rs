@@ -111,6 +111,16 @@ pub extern "C" fn calibre_deref(val: *mut Value) -> i64 {
     unsafe { i64::from((*val).clone()) }
 }
 
+// TODO Remove, eventually implemented a proper system for is expressions
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_is_host(val: *mut Value) -> bool {
+    if val.is_null() {
+        return false;
+    }
+
+    matches!(unsafe { &*val }, Value::Host(_))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_set_ref(val: *mut Value, tag: ValueTag, payload: i64) -> i64 {
     if val.is_null() {
