@@ -15,7 +15,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, IdentifierOrDestructure, VarType,
             access::AstIndex,
-            binary::{AsFailureMode, AstAs, AstComparison},
+            binary::AstComparison,
             conditionals::{AstIf, IfComparisonType},
             declaration::AstDeclareDestructure,
             flow::AstBreak,
@@ -118,33 +118,35 @@ fn create_for_loop_break_condition(
     let idx_node = AstNode::identifier(span, &temp_names.idx);
     let next_node = AstNode::identifier(span, &temp_names.next);
 
+    let condition = if is_indexable_loop {
+        AstNode::new(
+            span,
+            AstNodeType::ComparisonExpression(AstComparison {
+                left: Box::new(idx_node),
+                right: Box::new(if is_count_loop {
+                    iter_node.clone()
+                } else {
+                    AstNode::call(
+                        span,
+                        AstNode::identifier(span, "len"),
+                        vec![CallArg::Value(iter_node.clone())],
+                    )
+                }),
+                operator: ComparisonOperator::GreaterEqual,
+            }),
+        )
+    } else {
+        AstNode::call(
+            span,
+            AstNode::member(span, next_node, "is_none"),
+            Vec::new(),
+        )
+    };
+
     AstNode::new(
         span,
         AstNodeType::IfStatement(AstIf {
-            comparison: Box::new(IfComparisonType::If(AstNode::new(
-                span,
-                if is_indexable_loop {
-                    AstNodeType::ComparisonExpression(AstComparison {
-                        left: Box::new(idx_node),
-                        right: Box::new(if is_count_loop {
-                            iter_node.clone()
-                        } else {
-                            AstNode::call(
-                                span,
-                                AstNode::identifier(span, "len"),
-                                vec![CallArg::Value(iter_node.clone())],
-                            )
-                        }),
-                        operator: ComparisonOperator::GreaterEqual,
-                    })
-                } else {
-                    AstNodeType::ComparisonExpression(AstComparison {
-                        left: Box::new(next_node),
-                        right: Box::new(AstNode::none(span)),
-                        operator: ComparisonOperator::Equal,
-                    })
-                },
-            ))),
+            comparison: Box::new(IfComparisonType::If(condition)),
             then: Box::new(AstNode::new_temp_scope(vec![AstNode::new(
                 span,
                 AstNodeType::Break(AstBreak {
@@ -344,16 +346,12 @@ impl MirLowering for AstLoop {
                             } else {
                                 range.clone()
                             }
+                        } else if let AstNodeType::RefStatement(AstRef { value, .. }) =
+                            &range.node_type
+                        {
+                            *value.clone()
                         } else {
-                            // TODO Get gen type
-                            AstNode::new(
-                                span,
-                                AstNodeType::AsExpression(AstAs {
-                                    value: Box::new(range),
-                                    data_type: ParserDataType::new(span, ParserInnerType::Dynamic),
-                                    failure_mode: AsFailureMode::Panic,
-                                }),
-                            )
+                            range.clone()
                         },
                         AstNode::int(span, 0),
                     )
@@ -385,7 +383,11 @@ impl MirLowering for AstLoop {
                         span,
                         temp_names.next.clone(),
                         VarType::Mutable,
-                        AstNode::none(span),
+                        AstNode::call(
+                            span,
+                            AstNode::member(span, iter_node.clone(), "next"),
+                            Vec::new(),
+                        ),
                         ParserDataType::auto(span),
                     ));
                 }
