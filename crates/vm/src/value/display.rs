@@ -77,7 +77,7 @@ impl RuntimeValue {
 
                     let fields = &data.as_ref().0.0;
                     for (idx, (field_name, field_value)) in fields.iter().enumerate() {
-                        txt.push_str("  ");
+                        txt.push('\t');
                         txt.push_str(field_name);
                         txt.push_str(" : ");
 
@@ -90,7 +90,7 @@ impl RuntimeValue {
                                 if i == 0 {
                                     line.to_string()
                                 } else {
-                                    format!("\n    {}", line)
+                                    format!("\n\t\t{}", line)
                                 }
                             })
                             .collect::<String>();

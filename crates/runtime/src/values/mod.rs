@@ -1,5 +1,6 @@
 use crate::{
     gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, gc_header_at},
+    registry::{RuntimeTypeInfo, ensure_type_name},
     values::{
         aggregate::GcAggregate,
         enums::{calibre_option_some, calibre_result_err, calibre_result_ok},
@@ -46,7 +47,7 @@ fn register_alloc(inner: GcObject) -> *mut GcHeader {
     let header = Box::into_raw(Box::new(GcHeader {
         inner,
         marked: false,
-        type_name: std::ptr::null_mut(),
+        type_id: None,
         type_tag: None,
     }));
 
@@ -123,13 +124,23 @@ pub extern "C" fn calibre_is_host(val: *mut Value) -> bool {
     matches!(unsafe { &*val }, Value::Host(_))
 }
 
+// TODO Eventually remove the name param
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_gc_set_name(ptr: i64, name: *mut GcString, tag: ValueTag) -> i64 {
+pub extern "C" fn calibre_gc_set_type(
+    ptr: i64,
+    type_id: i64,
+    tag: ValueTag,
+    name: *mut GcString,
+) -> i64 {
     if let Some(header) = gc_header_at(ptr as usize) {
         unsafe {
-            (*header).type_name = name;
+            (*header).type_id = (type_id != 0).then_some(type_id as u64);
             (*header).type_tag = Some(tag);
         }
+    }
+
+    if type_id != 0 && !name.is_null() {
+        ensure_type_name(type_id as u64, unsafe { &*name }.data.clone());
     }
 
     ptr
@@ -155,21 +166,6 @@ pub(crate) fn dyn_box_inner(payload: usize) -> Option<Value> {
     }
 
     None
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_is_type(payload: i64, name: *mut string::GcString) -> bool {
-    if name.is_null() {
-        return false;
-    }
-
-    let target = unsafe { &*name }.data.as_str();
-
-    if let Some(inner) = dyn_box_inner(payload as usize) {
-        return inner.type_name().is_some_and(|x| x == target);
-    }
-
-    GcHeader::type_name(payload as usize).is_some_and(|x| x == target)
 }
 
 #[unsafe(no_mangle)]
@@ -244,40 +240,6 @@ impl Value {
         }
 
         self
-    }
-
-    fn type_name(&self) -> Option<String> {
-        Some(match self {
-            Value::Null => "null".to_string(),
-            Value::Bool(_) => "bool".to_string(),
-            Value::Int(_) => "int".to_string(),
-            Value::UInt(_) => "uint".to_string(),
-            Value::Byte(_) => "byte".to_string(),
-            Value::Float(_) => "float".to_string(),
-            Value::Big(_) => "big".to_string(),
-            Value::String(_) => "str".to_string(),
-            Value::Char(_) => "char".to_string(),
-            Value::Range(_, _) => "range".to_string(),
-            Value::Struct(p)
-            | Value::Tuple(p)
-            | Value::Enum(p)
-            | Value::Result(p)
-            | Value::Option(p) => GcHeader::type_name(*p as usize)?,
-            Value::List(p) => GcHeader::type_name(*p as usize)?,
-            Value::Host(p) => GcHeader::type_name(*p as usize)?,
-            Value::Reader(p) => {
-                GcHeader::type_name(*p as usize).unwrap_or_else(|| "reader".to_string())
-            }
-            Value::Func(_) => "fn".to_string(),
-            Value::Dynamic(p) => {
-                if let Some(inner) = dyn_box_inner(*p) {
-                    return inner.type_name();
-                }
-
-                return None;
-            }
-            Value::Ptr(_) => "ptr".to_string(),
-        })
     }
 
     pub fn from_tag(tag: ValueTag, value: i64) -> Self {
@@ -416,7 +378,15 @@ impl Display for Value {
                     write!(f, "null")
                 } else {
                     let value = unsafe { &**ptr };
-                    let name = GcHeader::type_name(*ptr as usize);
+
+                    let info = gc_header_at(*ptr as usize)
+                        .and_then(|header| unsafe { (*header).type_id })
+                        .and_then(RuntimeTypeInfo::get);
+
+                    let name = info
+                        .as_ref()
+                        .map(|info| info.name.clone())
+                        .or_else(|| GcHeader::type_name(*ptr as usize));
 
                     if value.data.is_empty()
                         && let Some(name) = name.as_ref()
@@ -424,14 +394,15 @@ impl Display for Value {
                         return write!(f, "{} {{}}", name);
                     }
 
-                    if !value.field_names.is_empty()
+                    if let Some(info) = info
+                        && !info.members.is_empty()
                         && let Some(name) = name.as_ref()
                     {
                         let mut txt = format!("{} {{\n", name);
 
                         for (idx, field_value) in value.data.iter().enumerate() {
-                            txt.push_str("  ");
-                            txt.push_str(value.field_names.get(idx).map_or("", String::as_str));
+                            txt.push('\t');
+                            txt.push_str(info.members.get(idx).map_or("", String::as_str));
                             txt.push_str(" : ");
 
                             txt.push_str(
@@ -443,7 +414,7 @@ impl Display for Value {
                                         if i == 0 {
                                             line.to_string()
                                         } else {
-                                            format!("\n    {}", line)
+                                            format!("\n\t\t{}", line)
                                         }
                                     })
                                     .collect::<String>(),

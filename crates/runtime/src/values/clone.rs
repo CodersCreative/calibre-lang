@@ -41,7 +41,7 @@ impl Value {
 
         if let (Some(old), Some(new)) = (gc_header_at(old_ptr), gc_header_at(new_ptr)) {
             unsafe {
-                (*new).type_name = (*old).type_name;
+                (*new).type_id = (*old).type_id;
                 (*new).type_tag = (*old).type_tag;
             }
         }

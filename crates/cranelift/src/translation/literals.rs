@@ -13,7 +13,6 @@ use cranelift::codegen::{
 };
 use cranelift_module::Module;
 use std::error::Error;
-use ustr::Ustr;
 
 impl CraneliftTranslation for LirLiteral {
     fn translate<'a, M: Module>(
@@ -218,11 +217,8 @@ impl CraneliftTranslation for LirAggregate {
         }
 
         let mut field_types = Vec::new();
-        let mut field_names = Vec::new();
 
-        for (i, (name, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
-            field_names.push(name);
-
+        for (i, (_, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
             let field = value.translate(translator, None)?;
 
             let tag =
@@ -254,32 +250,6 @@ impl CraneliftTranslation for LirAggregate {
         };
 
         translator.set_type_for_ptr(ptr, &data_type)?;
-
-        if !field_names.is_empty() {
-            let func_id = translator
-                .runtime_functions
-                .get("calibre_aggregate_set_field_name")
-                .ok_or("calibre_aggregate_set_field_name not found in runtime_functions")?;
-
-            let func_ref = translator
-                .module
-                .declare_func_in_func(*func_id, translator.builder.func);
-
-            for (i, name) in field_names.iter().enumerate() {
-                let name = LirLiteral::String(name.clone())
-                    .translate(translator, Some(MirDataType::Str))?;
-
-                let index = translator
-                    .builder
-                    .ins()
-                    .iconst(translator.types.int(), i as i64);
-
-                translator
-                    .builder
-                    .ins()
-                    .call(func_ref, &[ptr, index, name.value]);
-            }
-        }
 
         Ok(CompiledValue::new(ptr, data_type))
     }

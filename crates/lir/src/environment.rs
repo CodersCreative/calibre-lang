@@ -9,7 +9,10 @@ use calibre_mir::{
 use calibre_parser::ast::{ObjectMap, nodes::VarType};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
@@ -52,6 +55,22 @@ impl LirRegistry {
             LirType::Enum(_) => Some(x.0),
             _ => None,
         })
+    }
+
+    pub fn get_type_id(&self, data_type: &MirDataType) -> Option<u64> {
+        if let MirDataType::Struct { identifier, .. } = data_type
+            && self.types.contains_key(identifier)
+        {
+            return Some(identifier.get_type_id());
+        }
+
+        None
+    }
+
+    pub fn get_type_from_string(text: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        hasher.finish()
     }
 }
 

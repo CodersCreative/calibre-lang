@@ -18,6 +18,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display},
+    hash::{DefaultHasher, Hash, Hasher},
     rc::Rc,
     sync::Arc,
 };
@@ -189,6 +190,12 @@ impl TypeKey {
             .name
             .as_ref()
             .expect("VariableKey name attempted to be retrieved, but was None")
+    }
+
+    pub fn get_type_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.to_string().hash(&mut hasher);
+        hasher.finish()
     }
 }
 

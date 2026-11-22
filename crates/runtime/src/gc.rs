@@ -1,5 +1,6 @@
+use crate::registry::RuntimeTypeInfo;
 use crate::values::ValueTag;
-use crate::values::{GcObject, Value, string::GcString};
+use crate::values::{GcObject, Value};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use wasm_sync::Mutex;
@@ -7,7 +8,7 @@ use wasm_sync::Mutex;
 pub struct GcHeader {
     pub inner: GcObject,
     pub marked: bool,
-    pub type_name: *mut GcString,
+    pub type_id: Option<u64>,
     pub type_tag: Option<ValueTag>,
 }
 
@@ -25,11 +26,13 @@ impl GcHeader {
             return None;
         }
 
-        let header = gc_header_at(payload as usize)?;
+        let header = gc_header_at(payload)?;
 
         unsafe {
-            if let Some(name) = (*header).type_name.as_ref() {
-                return Some((*name).data.clone());
+            if let Some(id) = (*header).type_id
+                && let Some(name) = RuntimeTypeInfo::get_name(id)
+            {
+                return Some(name);
             }
 
             match &(*header).inner {

@@ -477,13 +477,13 @@ impl CraneliftTranslation for LirIs {
                 value.value = translator.runtime_call("calibre_deref", &[value.value])?;
             }
 
-            let descriptor = LirLiteral::String(Ustr::from(self.data_type.descriptor().as_str()))
-                .translate(translator, Some(MirDataType::Str))?;
+            if let Some(type_id) = translator.registry.get_type_id(&self.data_type) {
+                let type_id = translator.int_const(type_id as i64);
+                let value =
+                    translator.runtime_call("calibre_is_type_id", &[value.value, type_id])?;
 
-            let value =
-                translator.runtime_call("calibre_is_type", &[value.value, descriptor.value])?;
-
-            return Ok(CompiledValue::new(value, MirDataType::Bool));
+                return Ok(CompiledValue::new(value, MirDataType::Bool));
+            }
         }
 
         // TODO Remove just temporary to get generators working

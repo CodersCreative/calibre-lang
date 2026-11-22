@@ -1,9 +1,9 @@
 use crate::natives::{Natives, build_native_mapping};
 use crate::values::{CompiledValue, CraneliftTypes};
 use crate::{Functions, Globals, RuntimeFunctions};
-use calibre_lir::MirDataType;
 use calibre_lir::ast::{BlockId, LirLiteral, LirNodeType, LirTerminator};
-use calibre_lir::environment::{LirFunction, LirRegistry};
+use calibre_lir::environment::{LirFunction, LirRegistry, LirType};
+use calibre_lir::{MirDataType, TypeKey};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::ast::nodes::VarType;
 use cranelift::codegen::ir::{FuncRef, SigRef};
@@ -130,6 +130,64 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         Ok(())
     }
 
+    pub(crate) fn register_types(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut types: Vec<(TypeKey, i64, Vec<Ustr>)> = self
+            .registry
+            .types
+            .iter()
+            .map(|(key, ty)| {
+                let (kind, members) = match ty {
+                    LirType::Struct(fields) => (
+                        0,
+                        fields
+                            .0
+                            .iter()
+                            .map(|(name, _)| name.clone())
+                            .collect::<Vec<_>>(),
+                    ),
+                    LirType::Enum(variants) => (
+                        1,
+                        variants
+                            .iter()
+                            .map(|(name, _)| name.clone())
+                            .collect::<Vec<_>>(),
+                    ),
+                };
+
+                (key.clone(), kind, members)
+            })
+            .collect();
+
+        types.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+
+        for (key, kind, members) in types {
+            let id_value = self.int_const(key.get_type_id() as i64);
+            let kind_value = self.int_const(kind);
+            let count_value = self.int_const(members.len() as i64);
+
+            let name = LirLiteral::String(Ustr::from(key.name().to_string().as_str()))
+                .translate(self, Some(MirDataType::Str))?;
+
+            self.runtime_call(
+                "calibre_type_register",
+                &[id_value, name.value, kind_value, count_value],
+            )?;
+
+            for (index, member) in members.iter().enumerate() {
+                let member_name =
+                    LirLiteral::String(member.clone()).translate(self, Some(MirDataType::Str))?;
+                let index_value = self.int_const(index as i64);
+
+                self.runtime_call_void(
+                    "calibre_type_register_member",
+                    &[id_value, index_value, member_name.value],
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn runtime_lifecycle_call(
         &mut self,
         func_key: &VariableKey,
@@ -184,11 +242,23 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         ptr: Value,
         data_type: &MirDataType,
     ) -> Result<(), Box<dyn Error>> {
-        let name = Ustr::from(data_type.clone().descriptor().as_str());
-        let name = LirLiteral::String(name).translate(self, Some(MirDataType::Str))?;
+        let (type_id, name) = if let Some(id) = self.registry.get_type_id(data_type) {
+            (id as i64, self.int_const(0))
+        } else {
+            let descriptor = data_type.clone().descriptor();
+            let name = LirLiteral::String(Ustr::from(descriptor.as_str()))
+                .translate(self, Some(MirDataType::Str))?;
 
+            (
+                LirRegistry::get_type_from_string(&descriptor) as i64,
+                name.value,
+            )
+        };
+
+        let type_id = self.int_const(type_id);
         let tag = self.int_const(data_type.type_tag(self.registry.enums()) as i64);
-        self.runtime_call_void("calibre_gc_set_name", &[ptr, name.value, tag])
+
+        self.runtime_call_void("calibre_gc_set_type", &[ptr, type_id, tag, name])
     }
 
     pub(crate) fn coerce_to_dyn(

@@ -492,6 +492,7 @@ impl CompilerData {
                 .append_block_params_for_function_params(entry_block);
 
             translator.builder.switch_to_block(entry_block);
+            translator.register_types()?;
 
             let init_globals_key = VariableKey::from("calibre_init_globals");
             if let Some(&func_id) = translator.functions.get(&init_globals_key) {

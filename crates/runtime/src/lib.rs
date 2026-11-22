@@ -7,6 +7,7 @@ use astro_float::RoundingMode;
 pub mod exit;
 pub mod gc;
 pub mod native;
+pub mod registry;
 pub mod scheduler;
 pub mod values;
 
@@ -34,12 +35,20 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: values::calibre_deref as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_gc_set_name",
-            ptr: values::calibre_gc_set_name as *const u8,
+            name: "calibre_gc_set_type",
+            ptr: values::calibre_gc_set_type as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_is_type",
-            ptr: values::calibre_is_type as *const u8,
+            name: "calibre_type_register",
+            ptr: registry::calibre_type_register as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_type_register_member",
+            ptr: registry::calibre_type_register_member as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_is_type_id",
+            ptr: registry::calibre_is_type_id as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_dyn_field",
@@ -52,10 +61,6 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_dyn_unbox",
             ptr: values::calibre_dyn_unbox as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_aggregate_set_field_name",
-            ptr: aggregate::calibre_aggregate_set_field_name as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_set_ref",

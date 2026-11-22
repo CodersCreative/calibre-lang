@@ -182,9 +182,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
-                "calibre_gc_set_name",
+                "calibre_gc_set_type",
                 RuntimeFunction {
                     params: vec![
+                        (types::I64, ArgumentKind::Direct),
                         (types::I64, ArgumentKind::Direct),
                         (types::I64, ArgumentKind::Direct),
                         (types::I64, ArgumentKind::Direct),
@@ -194,7 +195,32 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
-                "calibre_is_type",
+                "calibre_type_register",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Int),
+                },
+            ),
+            (
+                "calibre_type_register_member",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_is_type_id",
                 RuntimeFunction {
                     params: vec![
                         (types::I64, ArgumentKind::Direct),
@@ -232,18 +258,6 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Dynamic),
-                },
-            ),
-            (
-                "calibre_aggregate_set_field_name",
-                RuntimeFunction {
-                    params: vec![
-                        (types::I64, ArgumentKind::Direct),
-                        (types::I64, ArgumentKind::Direct),
-                        (types::I64, ArgumentKind::Direct),
-                    ],
-                    returns: None,
-                    typed_return: None,
                 },
             ),
             (

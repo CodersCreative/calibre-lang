@@ -1,5 +1,6 @@
 use crate::{
     gc::{calibre_gc_add_root, gc_header_at},
+    registry,
     values::{GcObject, Value, ValueTag, register_alloc, string::GcString},
 };
 
@@ -8,7 +9,6 @@ use crate::{
 pub struct GcAggregate {
     pub field_count: usize,
     pub data: Vec<Value>,
-    pub field_names: Vec<String>,
 }
 
 impl GcAggregate {
@@ -33,7 +33,6 @@ impl GcAggregate {
         GcAggregate {
             field_count: data.len(),
             data,
-            field_names: Vec::new(),
         }
     }
 }
@@ -52,28 +51,6 @@ pub extern "C" fn calibre_aggregate_deep_clone(agg: *mut GcAggregate) -> *mut Gc
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_aggregate_set_field_name(
-    agg: *mut GcAggregate,
-    index: u64,
-    name: *mut GcString,
-) {
-    if agg.is_null() || name.is_null() {
-        return;
-    }
-
-    unsafe {
-        let names = &mut (*agg).field_names;
-        let name = (*name).data.clone();
-
-        if names.len() <= index as usize {
-            names.resize(index as usize + 1, String::new());
-        }
-
-        names[index as usize] = name;
-    }
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn calibre_dyn_field(agg: usize, name: *mut GcString) -> i64 {
     if agg == 0 || name.is_null() {
         return 0;
@@ -85,13 +62,15 @@ pub extern "C" fn calibre_dyn_field(agg: usize, name: *mut GcString) -> i64 {
         return 0;
     };
 
-    let object = unsafe { &(*header).inner };
+    let type_id = unsafe { (*header).type_id }.unwrap_or(0);
 
-    let GcObject::Aggregate(object) = object else {
+    let Some(index) = registry::member_index(type_id, target) else {
         return 0;
     };
 
-    let Some(index) = object.field_names.iter().position(|x| x == target) else {
+    let object = unsafe { &(*header).inner };
+
+    let GcObject::Aggregate(object) = object else {
         return 0;
     };
 
@@ -139,7 +118,6 @@ pub extern "C" fn calibre_gc_alloc_aggregate(field_count: u64) -> *mut GcAggrega
     GcAggregate {
         field_count: field_count as usize,
         data: vec![Value::Null; field_count as usize],
-        field_names: Vec::new(),
     }
     .alloc()
 }
