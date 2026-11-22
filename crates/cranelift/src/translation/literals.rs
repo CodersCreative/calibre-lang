@@ -221,7 +221,7 @@ impl CraneliftTranslation for LirAggregate {
         let mut field_names = Vec::new();
 
         for (i, (name, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
-            field_names.push(name.to_string());
+            field_names.push(name);
 
             let field = value.translate(translator, None)?;
 
@@ -266,7 +266,7 @@ impl CraneliftTranslation for LirAggregate {
                 .declare_func_in_func(*func_id, translator.builder.func);
 
             for (i, name) in field_names.iter().enumerate() {
-                let name = LirLiteral::String(Ustr::from(name.as_str()))
+                let name = LirLiteral::String(name.clone())
                     .translate(translator, Some(MirDataType::Str))?;
 
                 let index = translator

@@ -11,9 +11,9 @@ use cranelift::codegen::isa::TargetIsa;
 use cranelift::prelude::*;
 use cranelift_module::{FuncId, Module};
 use rustc_hash::{FxHashMap, FxHashSet};
-use ustr::Ustr;
 use std::error::Error;
 use std::sync::Arc;
+use ustr::Ustr;
 
 pub mod access;
 pub mod expression;

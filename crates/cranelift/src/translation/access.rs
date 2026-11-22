@@ -448,7 +448,7 @@ impl CraneliftTranslation for LirDeref {
             let result = translator.builder.inst_results(call)[0];
 
             let data_type = ptr.data_type.unwrap_all_refs().clone();
-            
+
             let result = if data_type.is_dyn() {
                 result
             } else {

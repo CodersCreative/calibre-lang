@@ -480,7 +480,8 @@ impl CraneliftTranslation for LirIs {
             let descriptor = LirLiteral::String(Ustr::from(self.data_type.descriptor().as_str()))
                 .translate(translator, Some(MirDataType::Str))?;
 
-            let value = translator.runtime_call("calibre_is_type", &[value.value, descriptor.value])?;
+            let value =
+                translator.runtime_call("calibre_is_type", &[value.value, descriptor.value])?;
 
             return Ok(CompiledValue::new(value, MirDataType::Bool));
         }

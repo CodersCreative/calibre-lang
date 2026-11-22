@@ -1,5 +1,6 @@
 use crate::{
-    gc::{calibre_gc_add_root, gc_header_at}, values::{GcObject, Value, ValueTag, register_alloc, string::GcString},
+    gc::{calibre_gc_add_root, gc_header_at},
+    values::{GcObject, Value, ValueTag, register_alloc, string::GcString},
 };
 
 #[repr(C)]
@@ -63,7 +64,7 @@ pub extern "C" fn calibre_aggregate_set_field_name(
     unsafe {
         let names = &mut (*agg).field_names;
         let name = (*name).data.clone();
-        
+
         if names.len() <= index as usize {
             names.resize(index as usize + 1, String::new());
         }
@@ -118,10 +119,7 @@ pub extern "C" fn calibre_dyn_field(agg: usize, name: *mut GcString) -> i64 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_dyn_box(tag: ValueTag, payload: i64) -> *mut GcAggregate {
-    let value = Value::from_tag(
-        tag,
-        payload,
-    );
+    let value = Value::from_tag(tag, payload);
 
     let agg = GcAggregate::new(vec![value]).alloc();
 

@@ -466,7 +466,18 @@ impl MirDataType {
     }
 
     pub fn is_boxed(&self) -> bool {
-        !matches!(self, Self::FfiType(_) | Self::Bool | Self::Byte | Self::Char | Self::Float | Self::Int | Self::Null | Self::Range | Self::UInt)
+        !matches!(
+            self,
+            Self::FfiType(_)
+                | Self::Bool
+                | Self::Byte
+                | Self::Char
+                | Self::Float
+                | Self::Int
+                | Self::Null
+                | Self::Range
+                | Self::UInt
+        )
     }
 
     pub fn replace_dyn_from(&self, ty: &MirDataType) -> MirDataType {

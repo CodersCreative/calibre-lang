@@ -1,5 +1,6 @@
 use crate::{
-    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, gc_header_at}, values::{
+    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, gc_header_at},
+    values::{
         aggregate::GcAggregate,
         enums::{calibre_option_some, calibre_result_err, calibre_result_ok},
         host::GcHost,
@@ -136,13 +137,16 @@ pub extern "C" fn calibre_gc_set_name(ptr: i64, name: *mut GcString, tag: ValueT
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_dyn_unbox(payload: i64) -> i64 {
-    dyn_box_inner(payload.cast_unsigned() as usize).map_or(payload, |value| i64::from(value))
+    dyn_box_inner(payload.cast_unsigned() as usize).map_or(payload, i64::from)
 }
 
 pub(crate) fn dyn_box_inner(payload: usize) -> Option<Value> {
     let header = gc_header_at(payload)?;
 
-    if !unsafe { (*header).type_tag }.as_ref().is_some_and(|x| x == &ValueTag::Dynamic) {
+    if !unsafe { (*header).type_tag }
+        .as_ref()
+        .is_some_and(|x| x == &ValueTag::Dynamic)
+    {
         return None;
     }
 
@@ -233,7 +237,7 @@ impl From<&Value> for ValueTag {
 
 impl Value {
     pub fn unbox_dyn(self) -> Self {
-        if let Value::Ptr(p) = self
+        if let Value::Dynamic(p) = self
             && let Some(inner) = dyn_box_inner(p)
         {
             return inner;
@@ -241,7 +245,6 @@ impl Value {
 
         self
     }
-
 
     fn type_name(&self) -> Option<String> {
         Some(match self {
@@ -262,7 +265,9 @@ impl Value {
             | Value::Option(p) => GcHeader::type_name(*p as usize)?,
             Value::List(p) => GcHeader::type_name(*p as usize)?,
             Value::Host(p) => GcHeader::type_name(*p as usize)?,
-            Value::Reader(p) => GcHeader::type_name(*p as usize).unwrap_or_else(|| "reader".to_string()),
+            Value::Reader(p) => {
+                GcHeader::type_name(*p as usize).unwrap_or_else(|| "reader".to_string())
+            }
             Value::Func(_) => "fn".to_string(),
             Value::Dynamic(p) => {
                 if let Some(inner) = dyn_box_inner(*p) {
@@ -271,7 +276,7 @@ impl Value {
 
                 return None;
             }
-            Value::Ptr(_) => "ptr".to_string()
+            Value::Ptr(_) => "ptr".to_string(),
         })
     }
 
@@ -301,15 +306,17 @@ impl Value {
             ValueTag::Reader => Self::Reader(value.cast_unsigned() as *mut GcReader),
             ValueTag::Func => Self::Func(value),
             ValueTag::Dynamic => {
-                if let Some(tag) = ValueTag::from_dyn(value.cast_unsigned() as usize) {
+                let payload = value.cast_unsigned() as usize;
+
+                if let Some(tag) = ValueTag::from_dyn(payload)
+                    && tag != ValueTag::Dynamic
+                {
                     return Self::from_tag(tag, value);
                 }
 
-                Self::Dynamic(value.cast_unsigned() as usize)
+                Self::Dynamic(payload)
             }
-            ValueTag::Ptr =>  {
-                Self::Ptr(value.cast_unsigned() as usize)
-            }
+            ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
 
@@ -409,6 +416,49 @@ impl Display for Value {
                     write!(f, "null")
                 } else {
                     let value = unsafe { &**ptr };
+                    let name = GcHeader::type_name(*ptr as usize);
+
+                    if value.data.is_empty()
+                        && let Some(name) = name.as_ref()
+                    {
+                        return write!(f, "{} {{}}", name);
+                    }
+
+                    if !value.field_names.is_empty()
+                        && let Some(name) = name.as_ref()
+                    {
+                        let mut txt = format!("{} {{\n", name);
+
+                        for (idx, field_value) in value.data.iter().enumerate() {
+                            txt.push_str("  ");
+                            txt.push_str(value.field_names.get(idx).map_or("", String::as_str));
+                            txt.push_str(" : ");
+
+                            txt.push_str(
+                                &field_value
+                                    .to_string()
+                                    .lines()
+                                    .enumerate()
+                                    .map(|(i, line)| {
+                                        if i == 0 {
+                                            line.to_string()
+                                        } else {
+                                            format!("\n    {}", line)
+                                        }
+                                    })
+                                    .collect::<String>(),
+                            );
+
+                            if idx + 1 < value.data.len() {
+                                txt.push(',');
+                            }
+
+                            txt.push('\n');
+                        }
+
+                        txt.push('}');
+                        return write!(f, "{}", txt);
+                    }
 
                     write!(
                         f,
@@ -444,17 +494,29 @@ impl Display for Value {
                 if ptr.is_null() {
                     write!(f, "null")
                 } else {
+                    let name = GcHeader::type_name(*ptr as usize);
                     let value = unsafe { &**ptr };
 
                     if value.data.len() < 2 {
                         if value.data.is_empty() {
-                            return write!(f, "null");
+                            return write!(f, "{}", name.unwrap_or(String::from("null")));
                         }
 
-                        return write!(f, "[{}]", value.data[0]);
+                        return write!(
+                            f,
+                            "{}[{}]",
+                            name.unwrap_or(String::from("")),
+                            value.data[0]
+                        );
                     }
 
-                    write!(f, "[{}] : {}", value.data[0], value.data[1],)
+                    write!(
+                        f,
+                        "{}[{}] : {}",
+                        name.unwrap_or(String::from("")),
+                        value.data[0],
+                        value.data[1],
+                    )
                 }
             }
             Value::Result(ptr) => {
