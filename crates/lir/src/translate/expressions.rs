@@ -22,6 +22,7 @@ use calibre_parser::{
     Span,
     ast::{binary::BinaryOperator, comparison::BooleanOperator},
 };
+use ustr::Ustr;
 
 impl LirLowering for MirBinary {
     #[inline(always)]
@@ -109,7 +110,14 @@ impl LirLowering for MirNeg {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Binary(LirBinary {
-            left: Box::new(LirNodeType::Literal(LirLiteral::Int(0))),
+            left: Box::new(match self.data_type {
+                MirDataType::Big => LirNodeType::Literal(LirLiteral::Big(Ustr::from("0"))),
+                MirDataType::Byte => LirNodeType::Literal(LirLiteral::Byte(0)),
+                MirDataType::Char => LirNodeType::Literal(LirLiteral::Char(0 as char)),
+                MirDataType::UInt => LirNodeType::Literal(LirLiteral::UInt(0)),
+                MirDataType::Float => LirNodeType::Literal(LirLiteral::Float(0.0)),
+                _ => LirNodeType::Literal(LirLiteral::Int(0)),
+            }),
             right: Box::new(env.lower_node(*self.value)),
             operator: BinaryOperator::Sub,
         })

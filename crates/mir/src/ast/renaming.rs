@@ -159,8 +159,8 @@ impl MirRenamable for MiddleNodeType {
                 value.rename(state);
                 data_type.rename(state);
             }
-            MiddleNodeType::NegExpression(MirNeg { value }) => value.rename(state),
-            MiddleNodeType::AsExpression(MirAs {
+            MiddleNodeType::NegExpression(MirNeg { value, data_type })
+            | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type,
                 failure_mode: _,

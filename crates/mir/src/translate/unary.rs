@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirNeg, types::MirDataType},
+    ast::{MiddleNode, MiddleNodeType, MirNeg, types::MirDataType, typing::MirTypable},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -27,9 +27,13 @@ impl MirLowering for AstNeg {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        let value = self.value.lower(env, scope, span, data_type)?;
+        let data_type = value.mir_type_of(env, scope, span);
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::NegExpression(MirNeg {
-                value: Box::new(self.value.lower(env, scope, span, data_type)?),
+                value: Box::new(value),
+                data_type: data_type.unwrap_or(MirDataType::Int),
             }),
             span,
         })

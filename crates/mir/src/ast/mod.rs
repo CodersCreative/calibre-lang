@@ -151,7 +151,7 @@ impl MiddleNode {
             | MiddleNodeType::Emit(MirEmit { value, .. })
             | MiddleNodeType::FieldAccess(MirField { base: value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
-            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::NegExpression(MirNeg { value, .. })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
@@ -225,7 +225,7 @@ impl MiddleNode {
             MiddleNodeType::AsExpression(MirAs { value, .. })
             | MiddleNodeType::Emit(MirEmit { value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
-            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::NegExpression(MirNeg { value, .. })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
@@ -290,7 +290,7 @@ impl MiddleNode {
             MiddleNodeType::AsExpression(MirAs { value, .. })
             | MiddleNodeType::Emit(MirEmit { value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
-            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::NegExpression(MirNeg { value, .. })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
@@ -417,6 +417,7 @@ pub struct MirBoolean {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirNeg {
     pub value: Box<MiddleNode>,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]

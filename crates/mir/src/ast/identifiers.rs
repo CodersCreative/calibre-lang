@@ -47,7 +47,7 @@ impl MirVarKeysUsed for MiddleNode {
                 data_type: _,
             })
             | MiddleNodeType::Discriminant(MirDiscriminant { value })
-            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::NegExpression(MirNeg { value, .. })
             | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type: _,
@@ -200,7 +200,7 @@ impl MiddleNode {
             })
             | MiddleNodeType::FieldAccess(MirField { base: value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::NegExpression(MirNeg { value, .. })
             | MiddleNodeType::Spawn(MirSpawn { value })
             | MiddleNodeType::Discriminant(MirDiscriminant { value })
             | MiddleNodeType::Clone(MirClone { value })
@@ -366,7 +366,7 @@ impl MiddleNode {
             }) => value.identifiers_referenced(include_functions, true),
             MiddleNodeType::FieldAccess(MirField { base: value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::NegExpression(MirNeg { value, .. })
             | MiddleNodeType::Spawn(MirSpawn { value })
             | MiddleNodeType::Discriminant(MirDiscriminant { value })
             | MiddleNodeType::AsExpression(MirAs {
