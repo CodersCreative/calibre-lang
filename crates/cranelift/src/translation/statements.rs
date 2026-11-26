@@ -79,8 +79,11 @@ impl CraneliftTranslation for LirAssign {
                         .value
                         .translate(translator, Some(boxed.data_type.clone()))?;
 
-                    translator.store_boxed(boxed.clone(), value)?;
-                    return Ok(boxed);
+                    let data_type = boxed.data_type.clone().unwrap_ffi();
+                    let old = translator.store_boxed(boxed, value)?;
+                    let old = translator.convert_from_i64(old, &data_type);
+
+                    return Ok(CompiledValue::new(old, data_type));
                 }
 
                 if let Some((data_type, var)) = translator.variables.get(&key).cloned() {
@@ -108,12 +111,22 @@ impl CraneliftTranslation for LirAssign {
                             .module
                             .declare_func_in_func(*func_id, translator.builder.func);
 
-                        translator
+                        let call = translator
                             .builder
                             .ins()
                             .call(func_ref, &[ptr, tag, payload]);
 
-                        return Ok(CompiledValue::new(payload, data_type));
+                        let old_payload = translator.builder.inst_results(call)[0];
+
+                        let pointee = match &data_type {
+                            MirDataType::Ref(inner, _) => (**inner).clone(),
+                            _ => data_type.clone(),
+                        }
+                        .unwrap_ffi();
+
+                        let old = translator.convert_from_i64(old_payload, &pointee);
+
+                        return Ok(CompiledValue::new(old, pointee));
                     }
 
                     let value = if data_type.is_dyn() {
@@ -122,8 +135,15 @@ impl CraneliftTranslation for LirAssign {
                         value
                     };
 
+                    let old = translator.builder.use_var(var);
+
+                    if translator.gc_managed_vars.contains(&key) {
+                        let func_ref = translator.get_add_root()?;
+                        translator.builder.ins().call(func_ref, &[old]);
+                    }
+
                     translator.builder.def_var(var, value.value);
-                    Ok(value)
+                    Ok(CompiledValue::new(old, data_type))
                 } else if let Some((data_type, data_id)) = translator.globals.get(&key).cloned() {
                     let value = self.value.translate(translator, Some(data_type.clone()))?;
 
@@ -136,28 +156,29 @@ impl CraneliftTranslation for LirAssign {
                         .ins()
                         .symbol_value(translator.types.ptr(), global);
 
+                    let cl_type = translator.types.to_cranelift_type(&data_type);
+
+                    let old = translator
+                        .builder
+                        .ins()
+                        .load(cl_type, MachMemFlags::new(), addr, 0);
+
                     translator
                         .builder
                         .ins()
                         .store(MachMemFlags::new(), value.value, addr, 0);
 
-                    Ok(value)
+                    Ok(CompiledValue::new(old, data_type))
                 } else {
                     Err(format!("Unable to find variable: {key}").into())
                 }
             }
             LirLValue::Ptr(ptr) => {
+                let value = self.value.translate(translator, None)?;
+                let value_type = value.data_type.clone();
                 let ptr = ptr.translate(translator, None)?;
 
-                let value = self.value.translate(translator, None)?;
-
-                let data_type = if ptr.data_type.is_dyn() {
-                    value.data_type.clone()
-                } else {
-                    ptr.data_type.clone()
-                };
-
-                let tag = value.data_type.type_tag(translator.registry.enums()) as i64;
+                let tag = value_type.type_tag(translator.registry.enums()) as i64;
                 let tag = translator.builder.ins().iconst(translator.types.int(), tag);
 
                 let runtime_name = "calibre_set_ref";
@@ -179,7 +200,16 @@ impl CraneliftTranslation for LirAssign {
                     .call(func_ref, &[ptr.value, tag, payload]);
                 let result = translator.builder.inst_results(call)[0];
 
-                Ok(CompiledValue::new(result, data_type))
+                let old_data_type = match &ptr.data_type {
+                    MirDataType::Ref(inner, _) => (**inner).clone(),
+                    other if other.is_dyn() => value_type,
+                    other => other.clone(),
+                }
+                .unwrap_ffi();
+            
+                let old = translator.convert_from_i64(result, &old_data_type);
+
+                Ok(CompiledValue::new(old, old_data_type))
             }
         }
     }

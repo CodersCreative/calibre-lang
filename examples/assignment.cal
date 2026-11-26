@@ -1,0 +1,29 @@
+type Id:<T> := struct {
+	value : T 
+};
+
+const main := fn => {
+	let mut value := 10000;
+	let prev := value := 80;
+	print(prev & " = " & "10000");
+	print(value);
+	print();
+
+	let mut value := Id { value : 20000 };
+	let prev := value.value := 80;
+	print(prev & " = " & "20000");
+	print(value);
+	print();
+
+	let mut value := [30000];
+	let prev := value[0]! := 80;
+	print(prev & " = " & "30000");
+	print(value as! str);
+	print();
+
+	let mut value := [Id { value : 40000 }];
+	let prev := value[0]!.value := 80;
+	print(prev & " = " & "40000");
+	print(value as! str);
+	print();
+};

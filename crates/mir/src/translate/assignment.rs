@@ -239,7 +239,7 @@ impl MirLowering for AstAssignment {
                             AstNodeType::IndexAccess(AstIndex {
                                 base,
                                 index,
-                                panic: false,
+                                panic: true,
                             }),
                         )
                         .lower_or_empty(

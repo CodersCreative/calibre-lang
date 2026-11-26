@@ -311,7 +311,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         &mut self,
         boxed: CompiledValue,
         value: CompiledValue,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<Value, Box<dyn Error>> {
         let value = if let Some(value) = self.box_dyn_if_scalar(&boxed.data_type, &value)? {
             value
         } else {
@@ -327,11 +327,17 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
 
         let func_ref = self.module.declare_func_in_func(func_id, self.builder.func);
 
-        self.builder
+        let call = self
+            .builder
             .ins()
             .call(func_ref, &[boxed.value, tag, value]);
 
-        Ok(())
+        let results = self.builder.inst_results(call);
+
+        results
+            .first()
+            .copied()
+            .ok_or_else(|| "calibre_set_ref returned no value".into())
     }
 
     pub fn translate_function(mut self, function: LirFunction) -> Result<(), Box<dyn Error>> {
