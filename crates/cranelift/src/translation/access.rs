@@ -90,6 +90,19 @@ impl CraneliftTranslation for LirMember {
                     false
                 }
             }
+            MirDataType::Tuple(values) => {
+                if let Ok(i) = member.parse::<usize>()
+                    && let Some(ty) = values.get(i)
+                {
+                    index = i;
+                    data_type = Some(MirDataType::Ref(
+                        Box::new(ty.clone()),
+                        RefMutability::MutRef,
+                    ));
+                }
+
+                false
+            }
             MirDataType::Option(x) => {
                 data_type = if x.is_dyn() {
                     data_type

@@ -210,7 +210,10 @@ impl CraneliftTranslation for LirBinary {
             .right
             .translate(translator, Some(left.data_type.clone()))?;
 
-        if left.data_type == MirDataType::Float && right.data_type == MirDataType::Float {
+        if self.operator != BinaryOperator::Pow
+            && left.data_type == MirDataType::Float
+            && right.data_type == MirDataType::Float
+        {
             let left_value = if left.data_type == MirDataType::Float {
                 left.value
             } else {
@@ -237,7 +240,10 @@ impl CraneliftTranslation for LirBinary {
             };
 
             Ok(CompiledValue::new(res, MirDataType::Float))
-        } else if left.data_type.is_int_or_bool() && right.data_type.is_int_or_bool() {
+        } else if self.operator != BinaryOperator::Pow
+            && left.data_type.is_int_or_bool()
+            && right.data_type.is_int_or_bool()
+        {
             let is_unsigned = left.data_type.is_unsigned() || right.data_type.is_unsigned();
 
             let left_value = left.value;
@@ -337,10 +343,10 @@ impl CraneliftTranslation for LirBinary {
 
             let result = translator.builder.inst_results(call)[0];
 
-            Ok(CompiledValue::new(
-                result,
-                data_type.unwrap_or(MirDataType::Dynamic),
-            ))
+            let result_type = data_type.unwrap_or(MirDataType::Dynamic);
+            let result = translator.convert_from_i64(result, &result_type);
+
+            Ok(CompiledValue::new(result, result_type))
         }
     }
 }
