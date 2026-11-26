@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirIs,
-        types::MirDataType,
+        MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDiscriminant,
+        MirInt, MirIs, types::MirDataType, typing::MirTypable,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -9,6 +9,7 @@ use crate::{
     symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     translate::MirLowering,
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
@@ -16,11 +17,13 @@ use calibre_parser::{
         Operator,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::PotentialDollarIdentifier,
+        idents::{IntLiteralType, ParsedIntLiteral, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType,
             access::AstField,
-            binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
+            binary::{
+                AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs, IsType,
+            },
             flow::{AstTry, TryType},
             functions::CallArg,
             lists::AstList,
@@ -558,15 +561,90 @@ impl MirLowering for AstIs {
         span: Span,
         _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let data_type =
-            env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?;
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::IsExpression(MirIs {
-                value: Box::new(self.value.lower(env, scope, span, None)?),
-                data_type,
-            }),
-            span,
-        })
+        match self.right {
+            IsType::DataType(data_type) => {
+                let data_type =
+                    env.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?;
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::IsExpression(MirIs {
+                        value: Box::new(self.value.lower(env, scope, span, None)?),
+                        data_type,
+                    }),
+                    span,
+                })
+            }
+            IsType::Enum { base, variant } => {
+                let (value, data_type) = if let Some(base) = base {
+                    let base = env.resolve_data_type(scope, &base, ResolutionOptions::typing())?;
+                    let value = self.value.lower(env, scope, span, Some(base.clone()))?;
+
+                    (value, base)
+                } else {
+                    let value = self.value.lower(env, scope, span, None)?;
+                    let base = value
+                        .mir_type_of(env, scope, span)
+                        .ok_or_else(|| env.context.err_at_span(span, MiddleErr::InferImpossible))?;
+
+                    (value, base)
+                };
+
+                let variant = env
+                    .resolve(scope, &variant, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
+                let variant = match (&data_type, variant.trim()) {
+                    (MirDataType::Option(_), "Some") | (MirDataType::Result { .. }, "Ok") => 0,
+                    (MirDataType::Option(_), "None") | (MirDataType::Result { .. }, "Err") => 1,
+                    (MirDataType::Struct { identifier, .. }, variant) => env
+                        .typing
+                        .find_object_from_type_key(identifier)
+                        .and_then(|obj| match &obj.object_type {
+                            MiddleTypeDefType::Enum { variants, .. } => {
+                                variants.iter().position(|x| x.0 == variant)
+                            }
+                            _ => None,
+                        })
+                        .ok_or_else(|| env.context.err_at_span(span, MiddleErr::InferImpossible))?,
+                    _ => return Err(env.context.err_at_span(span, MiddleErr::InferImpossible)),
+                };
+
+                Ok(MiddleNode::new(
+                    MiddleNodeType::BooleanExpression(MirBoolean {
+                        left: Box::new(MiddleNode::new(
+                            MiddleNodeType::ComparisonExpression(MirComparison {
+                                left: Box::new(MiddleNode::new(
+                                    MiddleNodeType::Discriminant(MirDiscriminant {
+                                        value: Box::new(value.clone()),
+                                    }),
+                                    span,
+                                )),
+                                right: Box::new(MiddleNode::new(
+                                    MiddleNodeType::IntLiteral(MirInt {
+                                        value: ParsedIntLiteral {
+                                            value: variant as isize,
+                                            int_type: IntLiteralType::UInt,
+                                        },
+                                    }),
+                                    span,
+                                )),
+                                operator: ComparisonOperator::Equal,
+                            }),
+                            span,
+                        )),
+                        right: Box::new(MiddleNode {
+                            node_type: MiddleNodeType::IsExpression(MirIs {
+                                value: Box::new(value),
+                                data_type,
+                            }),
+                            span,
+                        }),
+                        operator: BooleanOperator::And,
+                    }),
+                    span,
+                ))
+            }
+        }
     }
 
     fn type_of(

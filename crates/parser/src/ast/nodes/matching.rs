@@ -3,7 +3,7 @@ use crate::{
     ast::{
         Substitutable,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, VarType, functions::FunctionHeader},
+        nodes::{AstNode, VarType, binary::IsType, functions::FunctionHeader},
         types::ParserDataType,
     },
 };
@@ -83,7 +83,7 @@ pub enum MatchArmType {
         name: PotentialDollarIdentifier,
     },
     Value(AstNode),
-    IsType(ParserDataType),
+    IsType(IsType),
     Wildcard(Span),
     Rest(RestPattern),
 }
@@ -190,7 +190,7 @@ impl MatchArmType {
             Self::ActivePattern { function, .. } => &function.span,
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
-            Self::IsType(x) => &x.span,
+            Self::IsType(x) => x.span(),
             Self::Wildcard(x) => x,
             Self::Rest(x) => match x {
                 RestPattern::Discard(x) => x,

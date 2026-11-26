@@ -1,5 +1,6 @@
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, translate::MirLowering,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    translate::MirLowering,
 };
 use calibre_parser::{
     Span,
@@ -241,23 +242,18 @@ impl MiddleEnvironment {
                     "get" => (
                         String::new(),
                         RefMutability::Ref,
-                        payload.clone().unwrap_or_else(|| {
-                            ParserDataType::new(
-                                span,
-                                ParserInnerType::Bool,
-                            )
-                        }),
+                        payload
+                            .clone()
+                            .unwrap_or_else(|| ParserDataType::new(span, ParserInnerType::Bool)),
                         self_member(span, *variant),
                     ),
                     "get_ref" => (
                         String::from("_ref"),
                         RefMutability::Ref,
                         match payload {
-                            Some(ty) => ParserDataType::reference(
-                                span,
-                                ty.clone(),
-                                RefMutability::Ref,
-                            ),
+                            Some(ty) => {
+                                ParserDataType::reference(span, ty.clone(), RefMutability::Ref)
+                            }
                             None => ParserDataType::new(span, ParserInnerType::Bool),
                         },
                         AstNode::new(
@@ -272,11 +268,9 @@ impl MiddleEnvironment {
                         String::from("_mut"),
                         RefMutability::MutRef,
                         match payload {
-                            Some(ty) => ParserDataType::reference(
-                                span,
-                                ty.clone(),
-                                RefMutability::MutRef,
-                            ),
+                            Some(ty) => {
+                                ParserDataType::reference(span, ty.clone(), RefMutability::MutRef)
+                            }
                             None => ParserDataType::new(span, ParserInnerType::Bool),
                         },
                         AstNode::new(
@@ -296,10 +290,8 @@ impl MiddleEnvironment {
                     payload_value
                 };
 
-                let return_type = ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(payload_type)),
-                );
+                let return_type =
+                    ParserDataType::new(span, ParserInnerType::Option(Box::new(payload_type)));
 
                 let condition = AstNode::new(
                     span,

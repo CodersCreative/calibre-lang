@@ -143,12 +143,13 @@ pub trait NodeVisitor {
                 data_type,
                 failure_mode,
             }),
-            AstNodeType::IsExpression(AstIs { value, data_type }) => {
-                AstNodeType::IsExpression(AstIs {
-                    value: Box::new(self.visit(*value)),
-                    data_type,
-                })
-            }
+            AstNodeType::IsExpression(AstIs {
+                value,
+                right: data_type,
+            }) => AstNodeType::IsExpression(AstIs {
+                value: Box::new(self.visit(*value)),
+                right: data_type,
+            }),
             AstNodeType::TupleLiteral(AstTuple { values }) => AstNodeType::TupleLiteral(AstTuple {
                 values: values.into_iter().map(|n| self.visit(n)).collect(),
             }),

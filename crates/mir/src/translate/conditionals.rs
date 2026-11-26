@@ -13,6 +13,7 @@ use calibre_parser::{
         comparison::BooleanOperator,
         nodes::{
             AstNode, AstNodeType,
+            binary::IsType,
             conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
             functions::CallArg,
             matching::{AstMatch, MatchArmType, MatchBody},
@@ -47,12 +48,10 @@ impl TypeNarrowing {
                     && let Ok(key) = env
                         .resolve(scope, &id.value, ResolutionOptions::idents())
                         .map(|x| x.unwrap_variable())
+                    && let IsType::DataType(data_type) = &is_expr.right
                 {
-                    let target_type = env.resolve_data_type(
-                        scope,
-                        &is_expr.data_type,
-                        ResolutionOptions::typing(),
-                    )?;
+                    let target_type =
+                        env.resolve_data_type(scope, data_type, ResolutionOptions::typing())?;
 
                     if let Some(variable) = env.symbols.variables.get_mut(&key)
                         && !negated

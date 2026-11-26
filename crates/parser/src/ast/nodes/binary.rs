@@ -1,9 +1,15 @@
-use crate::ast::{
-    binary::BinaryOperator,
-    comparison::{BooleanOperator, ComparisonOperator},
-    nodes::AstNode,
-    types::ParserDataType,
+use crate::{
+    Span,
+    ast::{
+        Substitutable,
+        binary::BinaryOperator,
+        comparison::{BooleanOperator, ComparisonOperator},
+        idents::PotentialDollarIdentifier,
+        nodes::AstNode,
+        types::ParserDataType,
+    },
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -43,9 +49,42 @@ pub struct AstAs {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum IsType {
+    DataType(ParserDataType),
+    Enum {
+        base: Option<ParserDataType>,
+        variant: PotentialDollarIdentifier,
+    },
+}
+
+impl IsType {
+    pub fn span(&self) -> &Span {
+        match self {
+            Self::DataType(x) => &x.span,
+            Self::Enum {
+                base: Some(base), ..
+            } => &base.span,
+            Self::Enum { variant, .. } => variant.span(),
+        }
+    }
+}
+
+impl Substitutable for IsType {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::DataType(x) => Self::DataType(x.substitute(subst)),
+            Self::Enum { base, variant } => Self::Enum {
+                base: base.map(|x| x.substitute(subst)),
+                variant,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstIs {
     pub value: Box<AstNode>,
-    pub data_type: ParserDataType,
+    pub right: IsType,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

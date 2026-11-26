@@ -3,7 +3,7 @@ use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::access::{AstField, AstIdentifier, AstIndex, AstScope};
 use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::binary::{
-    AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
+    AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs, IsType,
 };
 use crate::ast::nodes::conditionals::AstTernary;
 use crate::ast::nodes::flow::AstPipe;
@@ -14,7 +14,8 @@ use crate::ast::nodes::memory::{AstDeref, AstRef};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::parse::{
-    AstPrattParser, AstPrattParserFoldable, MapWithSpanExt, PrattData, potential_new_line,
+    AstParser, AstPrattParser, AstPrattParserFoldable, MapWithSpanExt, PrattData,
+    potential_new_line,
 };
 use crate::{
     ast::{
@@ -171,9 +172,7 @@ impl<'a> PrattParser {
             .padded_by(potential_new_line())
             .then(data.data_type.clone());
 
-        let is = just(Token::Is)
-            .padded_by(potential_new_line())
-            .ignore_then(data.data_type.clone());
+        let is = IsType::parser(data.clone());
 
         let access = select! { Token::Dot => true, Token::Scope => false }
             .padded_by(potential_new_line())
@@ -334,7 +333,7 @@ impl<'a> PrattParser {
                         span.into(),
                         AstNodeType::IsExpression(AstIs {
                             value: Box::new(value),
-                            data_type,
+                            right: data_type,
                         }),
                     )
                 }),

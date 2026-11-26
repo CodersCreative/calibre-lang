@@ -40,5 +40,9 @@ const main := fn => {
     let rectangle_value : <&mut <float, float>>? = value.get_Rectangle_ref();
     print("None = " & rectangle_value);
 
+    print("Is triangle : " & value is .Triangle);
+    print("Is circle : " & value is Shape.Circle);
+    print("Is shape : " & value is Shape)
+    
     print(value);
 }

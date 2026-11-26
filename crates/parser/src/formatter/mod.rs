@@ -786,7 +786,7 @@ impl Formatter {
             }
             MatchArmType::Value(x) => x.format(self),
             MatchArmType::IsType(data_type) => {
-                format!("is {}", data_type)
+                format!("is {}", data_type.format(self))
             }
             MatchArmType::Wildcard(_) => String::from("_"),
         }

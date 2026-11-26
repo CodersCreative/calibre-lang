@@ -3,6 +3,7 @@ use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::IdentifierOrDestructure;
 use crate::ast::nodes::VarType;
+use crate::ast::nodes::binary::IsType;
 use crate::ast::nodes::functions::FunctionHeader;
 use crate::ast::nodes::functions::FunctionParam;
 use crate::ast::nodes::matching::RestPattern;
@@ -267,7 +268,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 // is
                 just(Token::Is)
                     .ignore_then(data.data_type.clone())
-                    .map(MatchArmType::IsType),
+                    .map(|data_type| MatchArmType::IsType(IsType::DataType(data_type))),
                 // in
                 just(Token::In)
                     .ignore_then(data.node.clone())

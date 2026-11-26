@@ -57,10 +57,10 @@ impl PatternTranslatorDispatcher {
             }
             MatchArmType::IsType(data_type) => {
                 let condition = AstNode::new(
-                    data_type.span,
+                    *data_type.span(),
                     AstNodeType::IsExpression(AstIs {
                         value: Box::new(value.clone()),
-                        data_type: data_type.clone(),
+                        right: data_type.clone(),
                     }),
                 );
 

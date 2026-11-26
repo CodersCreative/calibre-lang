@@ -1,10 +1,11 @@
 use crate::ast::ObjectType;
+use crate::ast::nodes::binary::IsType;
 use crate::ast::nodes::misc::StandaloneTag;
 use crate::ast::nodes::types::{AstImpl, AstType, TypeDefType};
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserInnerType;
-use crate::parse::StatementData;
 use crate::parse::potential_new_line;
+use crate::parse::{PrattData, StatementData};
 use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr},
@@ -180,5 +181,36 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(TypeDefType::parser(data.clone()))
             .map(|(identifier, object)| AstType { identifier, object })
+    }
+}
+
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for IsType {
+    type Data = PrattData<'a, I>;
+
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
+        just(Token::Is)
+            .padded_by(potential_new_line())
+            .ignore_then(choice((
+                just(Token::Dot)
+                    .ignore_then(data.dollar_ident.clone())
+                    .map(|variant| Self::Enum {
+                        base: None,
+                        variant,
+                    }),
+                data.data_type
+                    .clone()
+                    .then(
+                        just(Token::Dot)
+                            .ignore_then(data.dollar_ident.clone())
+                            .or_not(),
+                    )
+                    .map(|(base, variant)| match variant {
+                        Some(variant) => Self::Enum {
+                            base: Some(base),
+                            variant,
+                        },
+                        _ => Self::DataType(base),
+                    }),
+            )))
     }
 }

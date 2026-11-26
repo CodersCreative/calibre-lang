@@ -1,6 +1,6 @@
 use crate::{
     ast::nodes::binary::{
-        AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
+        AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs, IsType,
     },
     formatter::{AstFormatting, Formatter},
 };
@@ -54,10 +54,29 @@ impl AstFormatting for AstIn {
     }
 }
 
+impl AstFormatting for IsType {
+    type PreFormat = ();
+
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        match self {
+            Self::DataType(x) => x.to_string(),
+            Self::Enum {
+                base: Some(base),
+                variant,
+            } => format!("{}.{}", base, variant),
+            Self::Enum { variant, .. } => format!(".{}", variant),
+        }
+    }
+}
+
 impl AstFormatting for AstIs {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        format!("{} is {}", self.value.format(formatter), self.data_type)
+        format!(
+            "{} is {}",
+            self.value.format(formatter),
+            self.right.format(formatter)
+        )
     }
 }

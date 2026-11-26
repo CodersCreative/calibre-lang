@@ -847,9 +847,12 @@ impl Substitutable for AstNodeType {
                     .collect(),
                 until: until.map(|x| Box::new(x.substitute(subst))),
             }),
-            Self::IsExpression(AstIs { value, data_type }) => Self::IsExpression(AstIs {
+            Self::IsExpression(AstIs {
+                value,
+                right: data_type,
+            }) => Self::IsExpression(AstIs {
                 value: Box::new(value.substitute(subst)),
-                data_type: data_type.substitute(subst),
+                right: data_type.substitute(subst),
             }),
             Self::IterExpression(AstIter {
                 data_type,

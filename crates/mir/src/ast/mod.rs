@@ -12,7 +12,7 @@ use calibre_parser::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIdentifier, AstIndex},
             assignment::AstAssignment,
-            binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs},
+            binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs, IsType},
             conditionals::{AstIf, IfComparisonType},
             declaration::AstDeclaration,
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
@@ -792,7 +792,7 @@ impl From<MiddleNodeType> for AstNodeType {
             }),
             MiddleNodeType::IsExpression(value) => AstNodeType::IsExpression(AstIs {
                 value: Box::new((*value.value).into()),
-                data_type: value.data_type.into(),
+                right: IsType::DataType(value.data_type.into()),
             }),
             MiddleNodeType::Conditional(value) => AstNodeType::IfStatement(AstIf {
                 comparison: Box::new(IfComparisonType::If((*value.comparison).into())),
