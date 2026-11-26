@@ -1,0 +1,44 @@
+type Shape := enum {
+    @get
+    Circle : float,
+    @get_ref
+    Cube : float,
+    @get_mut @get
+    Triangle : <float, float>,
+    @get_ref
+    Rectangle : <float, float>,
+}
+
+impl Shape {
+    const area := fn (self : Self) -> float => {
+        match self {
+            .Circle : let radius => return 3.14 * radius ** 2,
+            .Cube : let side => return side ** 2,
+            .Rectangle : (let width, let height) => return width * height,
+            .Triangle : (let base, let height) => return 0.5 * base * height,
+        }
+    }
+}
+
+const main := fn => {
+    let mut value : Shape = .Circle : 50.0;
+    print("area = " & value.area());
+
+    print(value);
+
+    let circle_value : float? = value.get_Circle();
+    print("Some : 50 = " & circle_value);
+
+    let cube_value : <&float>? = value.get_Cube_ref();
+    print("None = " & cube_value);
+
+    value := Shape.Triangle : (100.0, 200.0);
+
+    let triangle_value : <&mut <float, float>>? = value.get_Triangle_mut();
+    print("Some : (100, 200) = " & triangle_value);
+
+    let rectangle_value : <&mut <float, float>>? = value.get_Rectangle_ref();
+    print("None = " & rectangle_value);
+
+    print(value);
+}

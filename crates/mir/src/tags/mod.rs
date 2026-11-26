@@ -15,6 +15,7 @@ use std::{fmt::Debug, sync::Arc};
 use ustr::{Ustr, UstrMap};
 use wasm_sync::Mutex;
 
+mod accessors;
 mod builders;
 pub mod context;
 pub mod defaults;

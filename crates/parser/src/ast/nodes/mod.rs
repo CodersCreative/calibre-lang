@@ -306,6 +306,10 @@ impl AstNode {
         )
     }
 
+    pub fn self_identifier(span: Span) -> Self {
+        Self::identifier(span, "self")
+    }
+
     pub fn member(span: Span, base: Self, member: impl ToString) -> Self {
         Self::new(
             span,

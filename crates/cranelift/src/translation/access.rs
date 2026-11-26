@@ -343,8 +343,18 @@ impl CraneliftTranslation for LirRef {
             data_type.clone().map(|x| x.unwrap_all_refs().clone()),
         )?;
 
-        if matches!(value.data_type.unwrap_all_refs(), MirDataType::Ref(_, _)) {
-            return Ok(value);
+        if value.data_type.is_ref() {
+            let mutability = match &data_type {
+                Some(MirDataType::Ref(_, m)) => *m,
+                _ => RefMutability::MutRef,
+            };
+
+            let inner = value.data_type.unwrap_all_refs().clone();
+
+            return Ok(CompiledValue::new(
+                value.value,
+                MirDataType::Ref(Box::new(inner), mutability),
+            ));
         }
 
         let mutability = match &data_type {

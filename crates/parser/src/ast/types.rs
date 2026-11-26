@@ -306,6 +306,14 @@ impl ParserDataType {
         }
     }
 
+    pub fn reference(
+        span: Span,
+        inner: ParserDataType,
+        mutability: RefMutability,
+    ) -> ParserDataType {
+        ParserDataType::new(span, ParserInnerType::Ref(Box::new(inner), mutability))
+    }
+
     pub fn function(
         span: Span,
         parameters: Vec<ParserDataType>,

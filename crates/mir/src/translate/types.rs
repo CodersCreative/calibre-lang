@@ -17,7 +17,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        Substitutable,
+        ObjectType, Substitutable,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
@@ -233,6 +233,22 @@ impl MirLowering for AstType {
             None
         };
 
+        let accessor_fields = match &self.object {
+            TypeDefType::Struct {
+                fields: ObjectType::Map(map),
+            } => map
+                .iter()
+                .map(|(name, (tags, ty, _))| (*name, tags.clone(), ty.clone()))
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+
+        let accessor_node = if generic_params.is_empty() && !accessor_fields.is_empty() {
+            env.generate_accessors(scope, span, identifier.clone(), accessor_fields)?
+        } else {
+            None
+        };
+
         {
             let scope = env.scoping.scope_mut_or_err(scope)?;
 
@@ -241,34 +257,38 @@ impl MirLowering for AstType {
             }
         }
 
-        match (default_node, builder_nodes) {
-            (Some(node), None) => Ok(node),
-            (None, None) => Ok(MiddleNode {
+        let mut body = Vec::new();
+
+        if let Some(node) = default_node {
+            body.push(node);
+        }
+
+        if let Some(nodes) = builder_nodes {
+            body.push(nodes.0);
+            body.push(nodes.1);
+        }
+
+        if let Some(node) = accessor_node {
+            body.push(node);
+        }
+
+        if body.is_empty() {
+            Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span,
-            }),
-            (None, Some(nodes)) => Ok(MiddleNode {
+            })
+        } else {
+            Ok(MiddleNode {
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     label: None,
-                    body: Box::new([nodes.0, nodes.1]),
+                    body: body.into_boxed_slice(),
                     create_new_scope: false,
                     is_temp: false,
                     function_body: false,
                     scope_id: scope,
                 }),
                 span,
-            }),
-            (Some(node), Some(nodes)) => Ok(MiddleNode {
-                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                    label: None,
-                    body: Box::new([node, nodes.0, nodes.1]),
-                    create_new_scope: false,
-                    is_temp: false,
-                    function_body: false,
-                    scope_id: scope,
-                }),
-                span,
-            }),
+            })
         }
     }
 }

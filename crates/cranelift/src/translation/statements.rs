@@ -206,7 +206,7 @@ impl CraneliftTranslation for LirAssign {
                     other => other.clone(),
                 }
                 .unwrap_ffi();
-            
+
                 let old = translator.convert_from_i64(result, &old_data_type);
 
                 Ok(CompiledValue::new(old, old_data_type))

@@ -1,0 +1,30 @@
+type Vector2 := struct {
+    @set @get @with
+    x : int,
+    @get_mut @get_ref
+    y : int
+};
+
+const main := fn => {
+    let mut value : Vector2 = .{
+        x : 100,
+        y : 100,
+    };
+
+    print(value);
+
+    let value2 : Vector2 = value.with_x(500);
+    print("with x = 500 : " & value2);
+
+    let x_value : int = value.get_x();
+    let prev : int = value.set_x(200);
+    print("prev should equal 100, it is " & prev);
+
+    let y_value : &int = value.get_y_ref();
+    print(y_value.*);
+
+    let y_value : &mut int = value.get_y_mut();
+    y_value.* := 900;
+
+    print("with x = 200 and y = 900 : " & value);
+}
