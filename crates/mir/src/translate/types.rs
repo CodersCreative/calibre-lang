@@ -249,6 +249,28 @@ impl MirLowering for AstType {
             None
         };
 
+        let accessor_variants = match &self.object {
+            TypeDefType::Enum { variants, .. } => variants
+                .iter()
+                .map(|(tags, name, payload)| {
+                    let resolved = env
+                        .resolve(scope, name, ResolutionOptions::default().with_dollar())
+                        .ok()
+                        .map(|k| k.unwrap_dollar())
+                        .unwrap_or_else(|| Ustr::from(name.text()));
+                    (resolved, tags.clone(), payload.clone())
+                })
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+
+        let accessor_node = if generic_params.is_empty() && !accessor_variants.is_empty() {
+            env.generate_enum_accessors(scope, span, identifier.clone(), accessor_variants)?
+        } else {
+            None
+        }
+        .or(accessor_node);
+
         {
             let scope = env.scoping.scope_mut_or_err(scope)?;
 
@@ -272,13 +294,13 @@ impl MirLowering for AstType {
             body.push(node);
         }
 
-        if body.is_empty() {
-            Ok(MiddleNode {
+        match body.len() {
+            0 => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span,
-            })
-        } else {
-            Ok(MiddleNode {
+            }),
+            1 => Ok(body.remove(0)),
+            _ => Ok(MiddleNode {
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     label: None,
                     body: body.into_boxed_slice(),
@@ -288,7 +310,7 @@ impl MirLowering for AstType {
                     scope_id: scope,
                 }),
                 span,
-            })
+            }),
         }
     }
 }

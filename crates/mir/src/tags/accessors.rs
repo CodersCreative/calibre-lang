@@ -1,22 +1,25 @@
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, translate::MirLowering,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, translate::MirLowering,
 };
 use calibre_parser::{
     Span,
     ast::{
         ObjectType, RefMutability,
+        comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
             assignment::AstAssignment,
+            binary::AstComparison,
+            conditionals::{AstIf, IfComparisonType},
             declaration::AstDeclaration,
-            functions::{AstFunction, FunctionHeader, FunctionParam},
+            functions::{AstFunction, CallArg, FunctionHeader, FunctionParam},
             literals::AstStruct,
             memory::AstRef,
             misc::StandaloneTag,
             types::AstImpl,
         },
-        types::{GenericTypes, ParserDataType},
+        types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
 use ustr::Ustr;
@@ -88,7 +91,7 @@ impl MiddleEnvironment {
         span: Span,
         type_name: ParserText,
         fields: Vec<(Ustr, Vec<StandaloneTag>, ParserDataType)>,
-    ) -> Result<Option<crate::ast::MiddleNode>, MiddleErr> {
+    ) -> Result<Option<MiddleNode>, MiddleErr> {
         let name = type_name.text.clone();
         let mut methods = Vec::new();
 
@@ -200,6 +203,139 @@ impl MiddleEnvironment {
                     }
                     _ => {}
                 }
+            }
+        }
+
+        if methods.is_empty() {
+            return Ok(None);
+        }
+
+        let node = AstNode::new(
+            span,
+            AstNodeType::ImplDeclaration(AstImpl {
+                generics: GenericTypes::default(),
+                target: ParserDataType::object(span, &name),
+                variables: methods,
+            }),
+        )
+        .lower(self, scope, span, None)?;
+
+        Ok(Some(node))
+    }
+
+    pub fn generate_enum_accessors(
+        &mut self,
+        scope: ScopeId,
+        span: Span,
+        type_name: ParserText,
+        variants: Vec<(Ustr, Vec<StandaloneTag>, Option<ParserDataType>)>,
+    ) -> Result<Option<MiddleNode>, MiddleErr> {
+        let name = type_name.text.clone();
+        let mut methods = Vec::new();
+
+        for (index, (variant, tags, payload)) in variants.iter().enumerate() {
+            for tag in tags {
+                let tag_name = tag.tag.text.as_str();
+
+                let (suffix, mutability, payload_type, payload_value) = match tag_name {
+                    "get" => (
+                        String::new(),
+                        RefMutability::Ref,
+                        payload.clone().unwrap_or_else(|| {
+                            ParserDataType::new(
+                                span,
+                                ParserInnerType::Bool,
+                            )
+                        }),
+                        self_member(span, *variant),
+                    ),
+                    "get_ref" => (
+                        String::from("_ref"),
+                        RefMutability::Ref,
+                        match payload {
+                            Some(ty) => ParserDataType::reference(
+                                span,
+                                ty.clone(),
+                                RefMutability::Ref,
+                            ),
+                            None => ParserDataType::new(span, ParserInnerType::Bool),
+                        },
+                        AstNode::new(
+                            span,
+                            AstNodeType::RefStatement(AstRef {
+                                mutability: RefMutability::Ref,
+                                value: Box::new(self_member(span, *variant)),
+                            }),
+                        ),
+                    ),
+                    "get_mut" => (
+                        String::from("_mut"),
+                        RefMutability::MutRef,
+                        match payload {
+                            Some(ty) => ParserDataType::reference(
+                                span,
+                                ty.clone(),
+                                RefMutability::MutRef,
+                            ),
+                            None => ParserDataType::new(span, ParserInnerType::Bool),
+                        },
+                        AstNode::new(
+                            span,
+                            AstNodeType::RefStatement(AstRef {
+                                mutability: RefMutability::MutRef,
+                                value: Box::new(self_member(span, *variant)),
+                            }),
+                        ),
+                    ),
+                    _ => continue,
+                };
+
+                let payload_value = if payload.is_none() {
+                    AstNode::bool(span, true)
+                } else {
+                    payload_value
+                };
+
+                let return_type = ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(payload_type)),
+                );
+
+                let condition = AstNode::new(
+                    span,
+                    AstNodeType::ComparisonExpression(AstComparison {
+                        left: Box::new(AstNode::call(
+                            span,
+                            AstNode::identifier(span, "discriminant"),
+                            vec![CallArg::Value(AstNode::self_identifier(span))],
+                        )),
+                        right: Box::new(AstNode::int(span, format!("{index}u"))),
+                        operator: ComparisonOperator::Equal,
+                    }),
+                );
+
+                let body = AstNode::new(
+                    span,
+                    AstNodeType::IfStatement(AstIf {
+                        comparison: Box::new(IfComparisonType::If(condition)),
+                        then: Box::new(AstNode::ret(AstNode::call(
+                            span,
+                            AstNode::identifier(span, "some"),
+                            vec![CallArg::Value(payload_value)],
+                        ))),
+                        otherwise: Some(Box::new(AstNode::ret(AstNode::none(span)))),
+                    }),
+                );
+
+                let method = method(
+                    span,
+                    format!("get_{variant}{suffix}"),
+                    vec![self_param(span, &name, mutability)],
+                    return_type,
+                    body,
+                );
+
+                methods.push(method);
             }
         }
 
