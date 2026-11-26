@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDiscriminant,
-        MirInt, MirIs, types::MirDataType, typing::MirTypable,
+        MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirIs,
+        types::MirDataType, typing::MirTypable,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -17,13 +17,14 @@ use calibre_parser::{
         Operator,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::{IntLiteralType, ParsedIntLiteral, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
-            AstNode, AstNodeType,
+            AstNode, AstNodeType, VarType,
             access::AstField,
             binary::{
                 AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs, IsType,
             },
+            declaration::AstDeclaration,
             flow::{AstTry, TryType},
             functions::CallArg,
             lists::AstList,
@@ -566,27 +567,29 @@ impl MirLowering for AstIs {
                 let data_type =
                     env.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?;
 
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::IsExpression(MirIs {
-                        value: Box::new(self.value.lower(env, scope, span, None)?),
-                        data_type,
+                let value = self.value.lower(env, scope, span, None)?;
+                let value_data_type = value.mir_type_of(env, scope, span);
+
+                match value_data_type {
+                    Some(x) if !x.is_dyn() && !data_type.is_host() => {
+                        AstNode::bool(span, x.loose_eq(&data_type)).lower(env, scope, span, None)
+                    }
+                    _ => Ok(MiddleNode {
+                        node_type: MiddleNodeType::IsExpression(MirIs {
+                            value: Box::new(value),
+                            data_type,
+                        }),
+                        span,
                     }),
-                    span,
-                })
+                }
             }
             IsType::Enum { base, variant } => {
-                let (value, data_type) = if let Some(base) = base {
-                    let base = env.resolve_data_type(scope, &base, ResolutionOptions::typing())?;
-                    let value = self.value.lower(env, scope, span, Some(base.clone()))?;
-
-                    (value, base)
+                let data_type = if let Some(base) = base {
+                    env.resolve_data_type(scope, &base, ResolutionOptions::typing())?
                 } else {
-                    let value = self.value.lower(env, scope, span, None)?;
-                    let base = value
-                        .mir_type_of(env, scope, span)
-                        .ok_or_else(|| env.context.err_at_span(span, MiddleErr::InferImpossible))?;
-
-                    (value, base)
+                    self.value
+                        .type_of(env, scope, span)
+                        .ok_or_else(|| env.context.err_at_span(span, MiddleErr::InferImpossible))?
                 };
 
                 let variant = env
@@ -609,40 +612,50 @@ impl MirLowering for AstIs {
                     _ => return Err(env.context.err_at_span(span, MiddleErr::InferImpossible)),
                 };
 
-                Ok(MiddleNode::new(
-                    MiddleNodeType::BooleanExpression(MirBoolean {
-                        left: Box::new(MiddleNode::new(
-                            MiddleNodeType::ComparisonExpression(MirComparison {
-                                left: Box::new(MiddleNode::new(
-                                    MiddleNodeType::Discriminant(MirDiscriminant {
-                                        value: Box::new(value.clone()),
-                                    }),
-                                    span,
-                                )),
-                                right: Box::new(MiddleNode::new(
-                                    MiddleNodeType::IntLiteral(MirInt {
-                                        value: ParsedIntLiteral {
-                                            value: variant as isize,
-                                            int_type: IntLiteralType::UInt,
-                                        },
-                                    }),
-                                    span,
-                                )),
-                                operator: ComparisonOperator::Equal,
-                            }),
+                let value_ident = env.context.get_temp("is_value");
+
+                let value_decl = AstNode::new(
+                    span,
+                    AstNodeType::VariableDeclaration(AstDeclaration {
+                        var_type: VarType::Immutable,
+                        identifier: PotentialDollarIdentifier::new(span, &value_ident),
+                        data_type: ParserDataType::auto(span),
+                        value: self.value,
+                        declared: false,
+                    }),
+                );
+
+                let discriminant_check = AstNode::new(
+                    span,
+                    AstNodeType::ComparisonExpression(AstComparison {
+                        left: Box::new(AstNode::call(
                             span,
+                            AstNode::identifier(span, "discriminant"),
+                            vec![CallArg::Value(AstNode::identifier(span, &value_ident))],
                         )),
-                        right: Box::new(MiddleNode {
-                            node_type: MiddleNodeType::IsExpression(MirIs {
-                                value: Box::new(value),
-                                data_type,
-                            }),
-                            span,
-                        }),
+                        right: Box::new(AstNode::int(span, format!("{variant}u"))),
+                        operator: ComparisonOperator::Equal,
+                    }),
+                );
+
+                let type_check = AstNode::new(
+                    span,
+                    AstNodeType::IsExpression(AstIs {
+                        value: Box::new(AstNode::identifier(span, value_ident)),
+                        right: IsType::DataType(ParserDataType::from(data_type)),
+                    }),
+                );
+
+                let check = AstNode::new(
+                    span,
+                    AstNodeType::BooleanExpression(AstBoolean {
+                        left: Box::new(type_check),
+                        right: Box::new(discriminant_check),
                         operator: BooleanOperator::And,
                     }),
-                    span,
-                ))
+                );
+
+                AstNode::new_temp_scope(vec![value_decl, check]).lower(env, scope, span, _data_type)
             }
         }
     }

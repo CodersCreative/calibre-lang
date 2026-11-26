@@ -1,5 +1,5 @@
 impl<T> gen:<T> {
-	const next := fn (self : &mut Self) -> T? => {
+	const next := fn (mut self : &mut Self) -> T? => {
 		if self is host =>
 			return self.gen_next;
 
