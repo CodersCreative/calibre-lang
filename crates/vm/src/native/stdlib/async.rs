@@ -43,14 +43,16 @@ impl NativeFunction for ChannelSend {
         let value = env.resolve_value(pop_or_null(&mut args))?;
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
+        let Ok(mut queue) = ch.queue.lock() else {
+            return Ok(RuntimeValue::Bool(false));
+        };
+
         if ch.closed.load(Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
         }
 
-        if let Ok(mut queue) = ch.queue.try_lock() {
-            queue.push_back(value);
-            ch.cvar.notify_one();
-        }
+        queue.push_back(value);
+        ch.cvar.notify_one();
 
         Ok(RuntimeValue::Bool(true))
     }

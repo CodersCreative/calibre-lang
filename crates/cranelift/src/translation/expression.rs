@@ -206,9 +206,14 @@ impl CraneliftTranslation for LirBinary {
         mut data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let left = self.left.translate(translator, None)?;
-        let right = self
-            .right
-            .translate(translator, Some(left.data_type.clone()))?;
+
+        let left_data_type = match (self.operator, left.data_type.unwrap_all_refs()) {
+            (BinaryOperator::Shl, MirDataType::List(inner)) => Some((**inner).clone()),
+            (BinaryOperator::Shl, MirDataType::Tuple(_)) => None,
+            _ => Some(left.data_type.clone()),
+        };
+
+        let right = self.right.translate(translator, left_data_type.clone())?;
 
         if self.operator != BinaryOperator::Pow
             && left.data_type == MirDataType::Float
@@ -343,7 +348,7 @@ impl CraneliftTranslation for LirBinary {
 
             let result = translator.builder.inst_results(call)[0];
 
-            let result_type = data_type.unwrap_or(MirDataType::Dynamic);
+            let result_type = data_type.or(left_data_type).unwrap_or(MirDataType::Dynamic);
             let result = translator.convert_from_i64(result, &result_type);
 
             Ok(CompiledValue::new(result, result_type))

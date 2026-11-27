@@ -115,6 +115,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_range_index",
             ptr: range::calibre_range_index as *const u8,
         },
+        RuntimeSymbol {
+            name: "calibre_range_index_option",
+            ptr: range::calibre_range_index_option as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_range_slice_option",
+            ptr: range::calibre_range_slice_option as *const u8,
+        },
         // string
         RuntimeSymbol {
             name: "calibre_gc_alloc_string",
@@ -139,6 +147,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_string_slice",
             ptr: string::calibre_string_slice as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_string_index_option",
+            ptr: string::calibre_string_index_option as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_string_slice_option",
+            ptr: string::calibre_string_slice_option as *const u8,
         },
         // aggregate
         RuntimeSymbol {
@@ -202,12 +218,20 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: list::calibre_list_index as *const u8,
         },
         RuntimeSymbol {
+            name: "calibre_list_index_option",
+            ptr: list::calibre_list_index_option as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_list_ref_index",
             ptr: list::calibre_list_ref_index as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_list_slice",
             ptr: list::calibre_list_slice as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_slice_option",
+            ptr: list::calibre_list_slice_option as *const u8,
         },
         // enums
         RuntimeSymbol {

@@ -4,7 +4,7 @@ type Point := struct {
 
 impl Point {
     const new := fn(x y : int) -> Self =>
-        return Point {x, y}
+        return .{x, y}
 }
 
 type ListIter:<T> := struct { data : list:<T>, index : int };

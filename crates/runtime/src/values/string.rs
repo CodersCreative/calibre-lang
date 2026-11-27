@@ -1,6 +1,9 @@
 use crate::{
     gc::calibre_gc_add_root,
-    values::{GcObject, Value, ValueTag, normalize_index, register_alloc, resolve_slice_range},
+    values::{
+        GcObject, Value, ValueTag, aggregate::GcAggregate, enums::calibre_option_none,
+        invalid_index_panic, normalize_index, register_alloc, resolve_slice_range,
+    },
 };
 
 #[repr(C)]
@@ -56,37 +59,78 @@ pub extern "C" fn calibre_to_string(tag: ValueTag, value: i64) -> *mut GcString 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_string_index(string: *mut GcString, index: i64) -> u32 {
     if string.is_null() {
-        return 0;
+        invalid_index_panic();
     }
 
     unsafe {
-        let items = &mut (*string).data;
+        let items = (*string).data.chars().collect::<Vec<_>>();
+
         if let Some(i) = normalize_index(items.len() as u64, index) {
-            items.chars().nth(i).unwrap() as u32
+            items[i] as u32
         } else {
-            0
+            invalid_index_panic();
         }
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_string_slice(string: *mut GcString, slice: i64) -> *mut GcString {
+pub extern "C" fn calibre_string_index_option(
+    string: *mut GcString,
+    index: i64,
+) -> *mut GcAggregate {
     if string.is_null() {
-        return std::ptr::null_mut();
+        return calibre_option_none();
+    }
+
+    unsafe {
+        let items = (*string).data.chars().collect::<Vec<_>>();
+
+        if let Some(i) = normalize_index(items.len() as u64, index) {
+            Value::Char(items[i] as u32).some()
+        } else {
+            calibre_option_none()
+        }
+    }
+}
+
+fn string_slice(string: *mut GcString, slice: i64) -> Option<*mut GcString> {
+    if string.is_null() {
+        return None;
     }
 
     let start = slice as i32 as i64;
     let end = (slice >> 32) as i32 as i64;
 
     unsafe {
-        let items = &mut (*string).data;
+        let items = (*string).data.chars().collect::<Vec<_>>();
         if let Some((start, end)) = resolve_slice_range(items.len(), start, end) {
-            GcString {
-                data: items[start..end].to_string(),
-            }
-            .alloc()
+            Some(
+                GcString {
+                    data: items[start..end].iter().collect(),
+                }
+                .alloc(),
+            )
         } else {
-            std::ptr::null_mut()
+            None
         }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_string_slice(string: *mut GcString, slice: i64) -> *mut GcString {
+    match string_slice(string, slice) {
+        Some(x) => x,
+        None => invalid_index_panic(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_string_slice_option(
+    string: *mut GcString,
+    slice: i64,
+) -> *mut GcAggregate {
+    match string_slice(string, slice) {
+        Some(x) => Value::String(x).some(),
+        None => calibre_option_none(),
     }
 }

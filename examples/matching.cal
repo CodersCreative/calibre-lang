@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Short Circuiting
 type Point := struct { x y : int };
 
 type Shape := enum {
@@ -9,7 +8,7 @@ type Shape := enum {
 
 const describe_shape := fn match Shape -> str {
     .Circle : r => return "Circle with radius : " & r,
-    .Rectangle : (p1, p2) => return "Rectangle with p1 : " & p1 & " and p2 : " & p2,
+    .Rectangle : (let p1, let p2) => return "Rectangle with p1 : " & p1 & " and p2 : " & p2,
     .Unknown => return "Unknown shape",
 };
 

@@ -137,7 +137,13 @@ impl CraneliftTranslation for LirMove {
         _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Dropping
-        if let Some((data_type, var)) = translator.variables.get(&self.value) {
+        if let Some(value) = translator.boxed_vars.get(&self.value).cloned() {
+            let data_type = value.data_type.unwrap_ffi();
+            let value = translator.runtime_call("calibre_deref", &[value.value])?;
+            let value = translator.convert_from_i64(value, &data_type);
+
+            Ok(CompiledValue::new(value, data_type))
+        } else if let Some((data_type, var)) = translator.variables.get(&self.value) {
             let value = translator.builder.use_var(*var);
             Ok(CompiledValue::new(value, data_type.clone()))
         } else {

@@ -317,6 +317,17 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_list_index_option",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
                 "calibre_list_ref_index",
                 RuntimeFunction {
                     params: vec![
@@ -339,6 +350,17 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     ],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::List(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
+                "calibre_list_slice_option",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
                 },
             ),
             (
@@ -393,6 +415,28 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     ],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Range),
+                },
+            ),
+            (
+                "calibre_range_index_option",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
+                "calibre_range_slice_option",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
                 },
             ),
             (
@@ -568,6 +612,28 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     ],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_string_index_option",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
+                "calibre_string_slice_option",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
                 },
             ),
             (

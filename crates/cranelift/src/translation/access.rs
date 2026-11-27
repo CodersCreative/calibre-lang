@@ -219,29 +219,78 @@ impl CraneliftTranslation for LirIndex {
         let index = self.index.translate(translator, None)?;
 
         let is_slice = matches!(&index.data_type, MirDataType::Range);
+        let is_ref = matches!(base.data_type, MirDataType::Ref(_, _));
+        let base_type = base.data_type.unwrap_all_refs();
 
-        data_type = match base.data_type.unwrap_all_refs() {
-            x @ MirDataType::List(_) | x @ MirDataType::Range | x @ MirDataType::Str
-                if is_slice =>
-            {
-                Some(x.clone())
-            }
-            MirDataType::List(x) => Some(MirDataType::Ref(x.clone(), RefMutability::MutRef)),
+        let result_type = match base_type {
+            MirDataType::List(inner) if is_slice => Some(MirDataType::List(inner.clone())),
+            MirDataType::List(inner) => Some((**inner).clone()),
+            MirDataType::Range if is_slice => Some(MirDataType::Range),
             MirDataType::Range => Some(MirDataType::Int),
+            MirDataType::Str if is_slice => Some(MirDataType::Str),
             MirDataType::Str => Some(MirDataType::Char),
-            _ => data_type,
+            _ => None,
         };
 
-        let is_ref = matches!(base.data_type, MirDataType::Ref(_, _));
+        data_type = match &result_type {
+            Some(result_type)
+                if self.panic && matches!(base_type, MirDataType::List(_)) && !is_slice =>
+            {
+                Some(MirDataType::Ref(
+                    Box::new(result_type.clone()),
+                    RefMutability::MutRef,
+                ))
+            }
+            Some(result_type) if !self.panic => {
+                Some(MirDataType::Option(Box::new(result_type.clone())))
+            }
+            Some(result_type) => Some(result_type.clone()),
+            None => data_type,
+        };
 
-        let runtime_name = match base.data_type.unwrap_all_refs() {
-            MirDataType::List(_) if is_slice => "calibre_list_slice",
-            MirDataType::List(_) if is_ref => "calibre_list_ref_index",
-            MirDataType::List(_) => "calibre_list_index",
-            MirDataType::Range if is_slice => "calibre_range_slice",
-            MirDataType::Range => "calibre_range_index",
-            MirDataType::Str if is_slice => "calibre_string_slice",
-            MirDataType::Str => "calibre_string_index",
+        let runtime_name = match base_type {
+            MirDataType::List(_) if is_slice => {
+                if self.panic {
+                    "calibre_list_slice"
+                } else {
+                    "calibre_list_slice_option"
+                }
+            }
+            MirDataType::List(_) => {
+                if self.panic {
+                    "calibre_list_index"
+                } else {
+                    "calibre_list_index_option"
+                }
+            }
+            MirDataType::Range if is_slice => {
+                if self.panic {
+                    "calibre_range_slice"
+                } else {
+                    "calibre_range_slice_option"
+                }
+            }
+            MirDataType::Range => {
+                if self.panic {
+                    "calibre_range_index"
+                } else {
+                    "calibre_range_index_option"
+                }
+            }
+            MirDataType::Str if is_slice => {
+                if self.panic {
+                    "calibre_string_slice"
+                } else {
+                    "calibre_string_slice_option"
+                }
+            }
+            MirDataType::Str => {
+                if self.panic {
+                    "calibre_string_index"
+                } else {
+                    "calibre_string_index_option"
+                }
+            }
             x => unimplemented!("slicing a {}", x),
         };
 
@@ -256,10 +305,14 @@ impl CraneliftTranslation for LirIndex {
 
         let index = translator.convert_to_i64(index)?;
 
-        let call = translator
-            .builder
-            .ins()
-            .call(func_ref, &[base.value, index]);
+        let base = if is_ref {
+            translator.runtime_call("calibre_deref", &[base.value])?
+        } else {
+            base.value
+        };
+
+        let call = translator.builder.ins().call(func_ref, &[base, index]);
+
         let result = translator.builder.inst_results(call)[0];
 
         Ok(CompiledValue::new(

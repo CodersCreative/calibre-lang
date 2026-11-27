@@ -1,6 +1,9 @@
 use crate::{
     gc::calibre_gc_add_root,
-    values::{GcObject, Value, ValueTag, normalize_index, register_alloc, resolve_slice_range},
+    values::{
+        GcObject, Value, ValueTag, aggregate::GcAggregate, enums::calibre_option_none,
+        invalid_index_panic, normalize_index, register_alloc, resolve_slice_range,
+    },
 };
 
 #[repr(C)]
@@ -79,15 +82,31 @@ pub extern "C" fn calibre_list_push(lst: *mut GcList, tag: ValueTag, payload: i6
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_list_index(lst: *mut GcList, index: i64) -> *mut Value {
     if lst.is_null() {
-        return std::ptr::null_mut();
+        invalid_index_panic();
     }
 
     unsafe {
         let items = &mut (*lst).data;
         if let Some(i) = normalize_index(items.len() as u64, index) {
-            items.get_mut(i).unwrap() as *mut Value
+            &mut items[i] as *mut Value
         } else {
-            std::ptr::null_mut()
+            invalid_index_panic();
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_list_index_option(lst: *mut GcList, index: i64) -> *mut GcAggregate {
+    if lst.is_null() {
+        return calibre_option_none();
+    }
+
+    unsafe {
+        let items = &(*lst).data;
+        if let Some(i) = normalize_index(items.len() as u64, index) {
+            items[i].clone().some()
+        } else {
+            calibre_option_none()
         }
     }
 }
@@ -95,19 +114,30 @@ pub extern "C" fn calibre_list_index(lst: *mut GcList, index: i64) -> *mut Value
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_list_ref_index(lst: *mut Value, index: i64) -> *mut Value {
     if lst.is_null() {
-        return lst;
+        invalid_index_panic();
     }
 
     match unsafe { &mut (*lst) } {
         Value::List(x) => calibre_list_index(*x, index),
-        _ => lst,
+        _ => invalid_index_panic(),
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_list_slice(lst: *mut GcList, slice: i64) -> *mut GcList {
+pub extern "C" fn calibre_list_ref_index_option(lst: *mut Value, index: i64) -> *mut GcAggregate {
     if lst.is_null() {
-        return std::ptr::null_mut();
+        return calibre_option_none();
+    }
+
+    match unsafe { &mut (*lst) } {
+        Value::List(x) => calibre_list_index_option(*x, index),
+        _ => calibre_option_none(),
+    }
+}
+
+fn list_slice(lst: *mut GcList, slice: i64) -> Option<*mut GcList> {
+    if lst.is_null() {
+        return None;
     }
 
     let start = slice as i32 as i64;
@@ -116,12 +146,30 @@ pub extern "C" fn calibre_list_slice(lst: *mut GcList, slice: i64) -> *mut GcLis
     unsafe {
         let items = &mut (*lst).data;
         if let Some((start, end)) = resolve_slice_range(items.len(), start, end) {
-            GcList {
-                data: items[start..end].to_vec(),
-            }
-            .alloc()
+            Some(
+                GcList {
+                    data: items[start..end].to_vec(),
+                }
+                .alloc(),
+            )
         } else {
-            std::ptr::null_mut()
+            None
         }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_list_slice(lst: *mut GcList, slice: i64) -> *mut GcList {
+    match list_slice(lst, slice) {
+        Some(x) => x,
+        None => invalid_index_panic(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_list_slice_option(lst: *mut GcList, slice: i64) -> *mut GcAggregate {
+    match list_slice(lst, slice) {
+        Some(x) => Value::List(x).some(),
+        None => calibre_option_none(),
     }
 }

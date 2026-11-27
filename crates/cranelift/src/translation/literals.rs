@@ -378,6 +378,12 @@ impl CraneliftTranslation for LirRange {
         let to = (*self.to).translate(translator, Some(MirDataType::Int))?;
 
         let from = translator.convert_to_i64(from)?;
+        let from = translator.builder.ins().ireduce(types::I32, from);
+
+        let from = translator
+            .builder
+            .ins()
+            .uextend(translator.types.int(), from);
 
         let to = translator.convert_to_i64(to)?;
         let to = translator.builder.ins().ireduce(types::I32, to);

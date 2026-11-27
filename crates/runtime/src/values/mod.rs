@@ -1,5 +1,6 @@
 use crate::{
     gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, gc_header_at},
+    native::calibre_panic,
     registry::{RuntimeTypeInfo, ensure_type_name},
     values::{
         aggregate::GcAggregate,
@@ -73,6 +74,16 @@ fn normalize_index(len: u64, index: i64) -> Option<usize> {
     } else {
         None
     }
+}
+
+#[inline]
+pub(crate) fn invalid_index_panic() -> ! {
+    let message = GcString {
+        data: "Invalid index access when using panic".to_string(),
+    }
+    .alloc();
+
+    calibre_panic(message)
 }
 
 #[inline]
