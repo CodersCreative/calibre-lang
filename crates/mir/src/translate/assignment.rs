@@ -92,6 +92,8 @@ impl MirLowering for AstAssignment {
             .lower(env, scope, span, original_data_type);
         }
 
+        env.scoping.left_side_stack.push(*self.identifier.clone());
+
         let mut identifier_type = self
             .identifier
             .type_of(env, scope, self.identifier.span)
@@ -281,6 +283,8 @@ impl MirLowering for AstAssignment {
                 span,
             )?;
         }
+
+        let _ = env.scoping.left_side_stack.pop();
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::AssignmentExpression(value),

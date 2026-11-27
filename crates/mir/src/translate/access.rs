@@ -329,6 +329,13 @@ impl MirLowering for AstIdentifier {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        if let PotentialDollarIdentifier::DollarIdentifier(text) = &self.value.get_ident()
+            && text.trim() == "_"
+            && let Some(value) = env.scoping.left_side_stack.last().cloned()
+        {
+            return value.lower(env, scope, span, data_type);
+        }
+
         Ok(MiddleNode::identifier(
             span,
             match env.resolve_potential_node(scope, &self.value, ResolutionOptions::idents())? {

@@ -60,6 +60,7 @@ const process_thread := fn(lines : list:<str>, ch : &mut Channel:<list:<ProcessR
     let lines := try file.read_lines() => panic("Failed to read file.");
     let line_length := lines.len();
     let split_size := line_length / THREAD_COUNT;
+    
     let mut ch := Channel:<HashMap:<str, ProcessResult>>.new();
     defer ch.close();
 

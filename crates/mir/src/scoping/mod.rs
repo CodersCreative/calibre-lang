@@ -22,6 +22,7 @@ pub struct Scoping {
     pub scopes: Arena<MiddleScope>,
     pub loop_stack: Vec<LoopContext>,
     pub scope_stack: Vec<ScopeContext>,
+    pub left_side_stack: Vec<AstNode>,
     pub return_type_stack: Vec<MirDataType>,
     pub generic_param_stack: Vec<Vec<Ustr>>,
     pub all_time_generics: UstrSet,

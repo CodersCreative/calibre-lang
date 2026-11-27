@@ -23,5 +23,7 @@ type StackList := struct (list:<Stack2>);
 	print("arr2.0.values[9] = " & arr2.0.values[9]);
 	let mut stacks := StackList(list:<Stack2>[move arr2]);
 	stacks.0[0].0.values[2] := 80;
+	stacks.0[0]!.0.values[2]! := ($_ ** 2) + 90;
+	stacks.0[0]!.0.values[2]! += $_ + 50;
 	print("stacks.0[0].0.values[2] = " & stacks.0[0]!.0.values[2]);
 };
